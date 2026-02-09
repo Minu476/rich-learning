@@ -25,3 +25,20 @@ fsd50k_data/
 # Secrets
 *.env
 appsettings.Development.json
+
+# LaTeX build artifacts
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.synctex.gz
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.toc
+paper/missfont.log
+paper/IEEEtran.cls
+paper/algorithmic.sty
+paper/algorithm.sty
+paper/multirow.sty
+paper/enumitem.sty

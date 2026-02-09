@@ -7,11 +7,11 @@ import os
 from pathlib import Path
 from collections import Counter
 
-# Paths
-index_path = "/Volumes/WD-Black/RichLearningData/features/fsd50k_full/index.csv"
-gt_path = "/Volumes/WD-Black/RichLearningData/datasets/FSD50K/FSD50K.ground_truth/dev.csv"
-vocab_path = "/Volumes/WD-Black/RichLearningData/datasets/FSD50K/FSD50K.ground_truth/vocabulary.csv"
-out_path = "/Users/nassertowfigh/Projects/rich-learning/data/fsd50k_features.csv"
+# Paths — update these to point to your local FSD50K dataset
+index_path = "path/to/fsd50k_full/index.csv"
+gt_path = "path/to/FSD50K/FSD50K.ground_truth/dev.csv"
+vocab_path = "path/to/FSD50K/FSD50K.ground_truth/vocabulary.csv"
+out_path = "../data/fsd50k_features.csv"
 
 # Load vocabulary
 vocab = {}

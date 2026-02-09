@@ -5,7 +5,6 @@ type: software
 authors:
   - family-names: Towfigh
     given-names: Nasser
-    orcid: ""
 date-released: "2026-02-09"
 version: "1.0.0"
 license: Apache-2.0
@@ -20,7 +19,15 @@ keywords:
   - rich-learning
   - dotnet
 abstract: >-
-  Rich Learning is a reinforcement learning architecture that addresses
+  Rich Learning is a reinforcement learning paradigm that addresses
   catastrophic forgetting through topological graph memory. Knowledge is
   stored as navigable landmarks and transitions in a graph database,
   enabling zero-forgetting continual learning across sequential tasks.
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Towfigh
+      given-names: Nasser
+  title: "Rich Learning: Topological Graph Memory for Lifelong Reinforcement Learning"
+  year: 2026
+  url: "https://github.com/Minu476/rich-learning"

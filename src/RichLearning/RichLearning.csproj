@@ -10,7 +10,7 @@
     <Description>Rich Learning — Continual Reinforcement Learning with Topological Graph Memory in C#</Description>
     <Authors>Nasser Towfigh</Authors>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/nassertowfigh/rich-learning</RepositoryUrl>
+    <RepositoryUrl>https://github.com/Minu476/rich-learning</RepositoryUrl>
     <NoWarn>CS7022</NoWarn>
   </PropertyGroup>
 

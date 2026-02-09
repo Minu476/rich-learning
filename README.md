@@ -1,43 +1,44 @@
 # Rich Learning: Topological Graph Memory for Lifelong RL
 
 **Author:** Nasser Towfigh  
-**License:** [Apache 2.0](LICENSE) (Source Code) / [CC BY 4.0](paper/Rich-Learning-Paper.pdf) (Paper)  
+**License:** [Apache 2.0](LICENSE)  
 **Status:** Published Reference Implementation
 
 ## 📖 What is Rich Learning?
 **Rich Learning** is a reinforcement learning paradigm focused on the accumulation of persistent knowledge assets rather than transient weight optimization.
 
-In standard Deep RL, an agent "lives paycheck to paycheck"—often overwriting neural weights to learn new tasks (catastrophic forgetting). **Rich Learning** agents accumulate a **Topological Graph Memory**—a navigable map of the policy-state space stored in a graph database (Neo4j). This allows the agent to "spend" previously learned structures to solve novel problems zero-shot.
+In standard Deep RL, an agent "lives paycheck to paycheck"—often overwriting neural weights to learn new tasks (catastrophic forgetting). **Rich Learning** agents accumulate a **Topological Graph Memory**—a navigable map of the policy-state space stored in a graph database (Neo4j). New experiences *add to* the graph; they never degrade existing structure.
 
 ## 🚀 Key Innovations
 This repository contains the reference implementation of the **Rich Learning** architecture, featuring:
 
-### 1. Topological Graph Memory
-* **Asset-Based Learning:** Knowledge is stored as distinct nodes ("Landmarks") and edges ("Transitions") in Neo4j.
-* **Zero Forgetting:** New experiences add to the graph; they do not degrade existing structures.
-* **Loop Detection:** Uses Cypher queries to explicitly detect and break infinite loops in navigation.
+* **Topological Graph Memory:** Knowledge is stored as navigable "Landmarks" and "Transitions" in Neo4j, not just neural weights.
+* **Zero Forgetting:** New experiences add nodes and edges; they do not modify existing graph structure.
+* **Explainable Plans:** Navigation through named landmarks, fully auditable.
+* **C# / .NET 10:** Implemented in pure C# with zero Python dependencies, achieving ~30–50× performance gains in RL inner loops.
 
-### 2. Recursive Meta Hierarchy (RMH)
-A self-organizing structure where behavioral patterns are compounded into complex subgraphs. Just as compound interest grows wealth, the hierarchy allows the agent to compose high-level strategies from low-level primitives without retraining.
+## 📊 Experimental Results (from Paper)
 
-### 3. Agent Efficiency Tiering
-The system identifies "Star" agents and shares their learned topological patterns with "Struggling" agents, amplifying collective intelligence across the swarm.
+We validate on two continual learning benchmarks where standard MLPs catastrophically forget:
+
+| Benchmark | Method | Task A Accuracy | After Task B | Retention |
+| :--- | :--- | :--- | :--- | :--- |
+| **Split-MNIST** | Bare MLP | 97.9% | 0.0% | 0.0% |
+| | EWC (λ=100) | 97.9% | 19.1% | 19.5% |
+| | **Topological Memory** | 85.2% | **85.2%** | **100.0%** |
+| **Split-Audio** | Bare MLP | — | — | ~0% |
+| (FSD50K) | **Topological Memory** | — | — | **100.0%** |
+
+*The topological graph retains 100% of Task A landmarks after training fully on Task B.*
 
 ## 📄 Read the Paper
 [**Download the Full Research Paper (PDF)**](paper/Rich-Learning-Paper.pdf)  
-*Abstract: We introduce Rich Learning, a reinforcement learning architecture that addresses catastrophic forgetting through topological graph memory...*
-
-## 📊 Results (from Paper)
-| Domain | Challenge | Result |
-| :--- | :--- | :--- |
-| **Warehouse Logistics** | Multi-agent coordination (44 AGVs) | **0% Collision Rate**, 70 deliveries |
-| **Atari Games** | Continual learning (Pong → Breakout) | **100% Skill Retention** |
-| **Medical Imaging** | Distribution drift across 3 scanners | **100% Diagnostic Retention** |
+*Abstract: We introduce Rich Learning, a reinforcement learning paradigm that addresses catastrophic forgetting through topological graph memory...*
 
 ## 🛠️ Tech Stack
 * **Language:** C# 12 / .NET 10 (Zero Python dependencies)
 * **Database:** Neo4j (Graph Persistence)
-* **Core:** Fugue-Cartographer Engine
+* **Interfaces:** IGraphMemory, IStateEncoder, IExplorationStrategy, Cartographer
 
 ## ⚡ Quick Start
 
