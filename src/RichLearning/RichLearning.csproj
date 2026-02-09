@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>RichLearning</RootNamespace>
+    <AssemblyName>RichLearning</AssemblyName>
+    <Description>Rich Learning — Continual Reinforcement Learning with Topological Graph Memory in C#</Description>
+    <Authors>Nasser Towfigh</Authors>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/nassertowfigh/rich-learning</RepositoryUrl>
+    <NoWarn>CS7022</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.2" />
+    <PackageReference Include="Neo4j.Driver" Version="6.0.0" />
+  </ItemGroup>
+
+</Project>

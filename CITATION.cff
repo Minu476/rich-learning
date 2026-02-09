@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Rich Learning: Topological Graph Memory for Lifelong Reinforcement Learning"
+type: software
+authors:
+  - family-names: Towfigh
+    given-names: Nasser
+    orcid: ""
+date-released: "2026-02-09"
+version: "1.0.0"
+license: Apache-2.0
+url: "https://github.com/Minu476/rich-learning"
+repository-code: "https://github.com/Minu476/rich-learning"
+keywords:
+  - reinforcement-learning
+  - continual-learning
+  - catastrophic-forgetting
+  - topological-graph-memory
+  - neo4j
+  - rich-learning
+  - dotnet
+abstract: >-
+  Rich Learning is a reinforcement learning architecture that addresses
+  catastrophic forgetting through topological graph memory. Knowledge is
+  stored as navigable landmarks and transitions in a graph database,
+  enabling zero-forgetting continual learning across sequential tasks.

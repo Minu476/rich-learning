@@ -1,0 +1,27 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (downloaded at runtime)
+mnist_data/
+fsd50k_data/
+
+# Secrets
+*.env
+appsettings.Development.json
