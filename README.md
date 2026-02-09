@@ -1,6 +1,8 @@
 # Rich Learning: Topological Graph Memory for Lifelong RL
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18565288.svg)](https://doi.org/10.5281/zenodo.18565288)
+![Energy Efficient](https://img.shields.io/badge/Energy%20Efficiency-High-brightgreen?style=for-the-badge&logo=leaf)
+![Architecture](https://img.shields.io/badge/Hidden%20Layers-None-blue?style=for-the-badge)
 
 **Author:** Nasser Towfigh  
 **License:** [Apache 2.0](LICENSE)  
@@ -41,6 +43,16 @@ We validate on two continual learning benchmarks where standard MLPs catastrophi
 * **Language:** C# 12 / .NET 10 (Zero Python dependencies)
 * **Database:** Neo4j (Graph Persistence)
 * **Interfaces:** IGraphMemory, IStateEncoder, IExplorationStrategy, Cartographer
+
+## ⚡ Architectural Note: No Hidden Layers
+
+Unlike traditional Deep Learning approaches that rely on opaque hidden layers and computationally expensive backpropagation, **Rich Learning** operates without hidden layers.
+
+By offloading intelligence into explicit graph topology rather than neural weights, this paradigm achieves:
+
+* **Transparency:** Every decision path is traceable through named landmarks and edges.
+* **Energy Efficiency:** Inference is reduced to graph traversal (O(1) per hop) rather than matrix multiplication (O(N²)), resulting in a fraction of the energy consumption typical of Deep Neural Networks.
+* **Suitability for Edge:** Ideal for low-power, battery-operated devices where thermal limits and battery life are critical.
 
 ## ⚡ Quick Start
 
