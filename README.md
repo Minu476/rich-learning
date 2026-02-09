@@ -1,5 +1,7 @@
 # Rich Learning: Topological Graph Memory for Lifelong RL
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18565288.svg)](https://doi.org/10.5281/zenodo.18565288)
+
 **Author:** Nasser Towfigh  
 **License:** [Apache 2.0](LICENSE)  
 **Status:** Published Reference Implementation
