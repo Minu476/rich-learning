@@ -21,6 +21,38 @@ This repository contains the reference implementation of the **Rich Learning** a
 * **Explainable Plans:** Navigation through named landmarks, fully auditable.
 * **C# / .NET 10:** Implemented in pure C# with zero Python dependencies, achieving ~30–50× performance gains in RL inner loops.
 
+### 🏗️ Architecture
+
+```mermaid
+graph LR
+    subgraph Agent
+        A[Raw State] --> B[IStateEncoder]
+        B --> C[Embedding Vector]
+    end
+
+    subgraph Cartographer
+        C --> D{Nearest\nLandmark?}
+        D -->|New| E[Create Landmark]
+        D -->|Known| F[Traverse Edge]
+        E --> G[Plan Path]
+        F --> G
+    end
+
+    subgraph "Topological Graph Memory · Neo4j"
+        G --> H[(Landmarks\n& Transitions)]
+        H -->|Query| D
+    end
+
+    style A fill:#4a90d9,color:#fff
+    style B fill:#7b68ee,color:#fff
+    style C fill:#7b68ee,color:#fff
+    style D fill:#f5a623,color:#fff
+    style E fill:#50c878,color:#fff
+    style F fill:#50c878,color:#fff
+    style G fill:#50c878,color:#fff
+    style H fill:#e74c3c,color:#fff
+```
+
 ## 📊 Experimental Results (from Paper)
 
 We validate on two continual learning benchmarks where standard MLPs catastrophically forget:
@@ -34,6 +66,14 @@ We validate on two continual learning benchmarks where standard MLPs catastrophi
 | (FSD50K) | **Topological Memory** | — | — | **100.0%** |
 
 *The topological graph retains 100% of Task A landmarks after training fully on Task B.*
+
+```mermaid
+xychart-beta
+    title "Task A Retention After Learning Task B (Split-MNIST)"
+    x-axis ["Bare MLP", "EWC (lambda=100)", "Topological Memory"]
+    y-axis "Retention (%)" 0 --> 100
+    bar [0, 19.5, 100]
+```
 
 ## 📄 Read the Paper
 [**Download the Full Research Paper (PDF)**](paper/Rich-Learning-Paper.pdf)  
@@ -53,6 +93,35 @@ By offloading intelligence into explicit graph topology rather than neural weigh
 * **Transparency:** Every decision path is traceable through named landmarks and edges.
 * **Energy Efficiency:** Inference is reduced to graph traversal (O(1) per hop) rather than matrix multiplication (O(N²)), resulting in a fraction of the energy consumption typical of Deep Neural Networks.
 * **Suitability for Edge:** Ideal for low-power, battery-operated devices where thermal limits and battery life are critical.
+
+```mermaid
+graph TB
+    subgraph "❌ Deep Learning"
+        direction TB
+        I1[Input Layer] --> H1[Hidden Layer 1]
+        H1 --> H2[Hidden Layer 2]
+        H2 --> H3[Hidden Layer N...]
+        H3 --> O1[Output Layer]
+        O1 -.->|Backprop ∇W| H1
+        style H1 fill:#e74c3c,color:#fff
+        style H2 fill:#e74c3c,color:#fff
+        style H3 fill:#e74c3c,color:#fff
+    end
+
+    subgraph "✅ Rich Learning"
+        direction TB
+        S1((Landmark A)) -->|action α, r=0.9| S2((Landmark B))
+        S2 -->|action β, r=0.7| S3((Landmark C))
+        S1 -->|action γ, r=0.3| S4((Landmark D))
+        S3 -->|action δ, r=1.0| S5((Landmark E))
+        S4 -->|action ε, r=0.5| S2
+        style S1 fill:#50c878,color:#fff
+        style S2 fill:#50c878,color:#fff
+        style S3 fill:#50c878,color:#fff
+        style S4 fill:#50c878,color:#fff
+        style S5 fill:#50c878,color:#fff
+    end
+```
 
 ## ⚡ Quick Start
 
