@@ -11,11 +11,14 @@ using RichLearning.PoC.SplitAudio;
 //
 //  Usage:
 //    dotnet run                           # Interactive demo
-//    dotnet run -- SplitMnist             # Split-MNIST catastrophic forgetting PoC
-//    dotnet run -- SplitAudio             # Split-Audio with FSD50K features
+//    dotnet run -- SplitMnist             # Split-MNIST PoC (Neo4j)
+//    dotnet run -- SplitMnist --litedb    # Split-MNIST PoC (LiteDB — no server needed)
+//    dotnet run -- SplitAudio             # Split-Audio PoC (Neo4j)
+//    dotnet run -- SplitAudio --litedb    # Split-Audio PoC (LiteDB)
+//    dotnet run -- Compare                # Run both backends and compare results
 //    dotnet run -- Benchmark              # C# vs Python speed benchmark
 //
-//  Environment:
+//  Environment (Neo4j only):
 //    NEO4J_URI=bolt://localhost:7687
 //    NEO4J_USER=neo4j
 //    NEO4J_PASSWORD=password
@@ -24,6 +27,7 @@ using RichLearning.PoC.SplitAudio;
 var neo4jUri = Environment.GetEnvironmentVariable("NEO4J_URI") ?? "bolt://localhost:7687";
 var neo4jUser = Environment.GetEnvironmentVariable("NEO4J_USER") ?? "neo4j";
 var neo4jPassword = Environment.GetEnvironmentVariable("NEO4J_PASSWORD") ?? "password";
+bool useLiteDb = args.Any(a => a.Equals("--litedb", StringComparison.OrdinalIgnoreCase));
 
 using var loggerFactory = LoggerFactory.Create(builder =>
 {
@@ -36,49 +40,120 @@ var command = args.Length > 0 ? args[0].ToLowerInvariant() : "demo";
 switch (command)
 {
     case "splitmnist":
-        await RunSplitMnist();
+        await RunSplitMnist(useLiteDb);
         break;
     case "splitaudio":
-        await RunSplitAudio();
+        await RunSplitAudio(useLiteDb);
+        break;
+    case "compare":
+        await RunComparison();
         break;
     case "benchmark":
         RunBenchmark();
         break;
     default:
-        await RunDemo();
+        await RunDemo(useLiteDb);
         break;
 }
 
 // ── Split-MNIST PoC ──
 
-async Task RunSplitMnist()
+async Task RunSplitMnist(bool liteDb)
 {
     var logger = loggerFactory.CreateLogger("SplitMnist");
-    await using var memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-        loggerFactory.CreateLogger<Neo4jGraphMemory>());
-    await memory.InitialiseSchemaAsync();
-
-    var encoder = new MnistStateEncoder();
-    await SplitMnistDemo.RunAsync(memory, encoder, logger);
+    IGraphMemory memory;
+    if (liteDb)
+    {
+        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "splitmnist.db");
+        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
+        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
+    }
+    else
+    {
+        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
+            loggerFactory.CreateLogger<Neo4jGraphMemory>());
+    }
+    await using (memory)
+    {
+        await memory.InitialiseSchemaAsync();
+        var encoder = new MnistStateEncoder();
+        await SplitMnistDemo.RunAsync(memory, encoder, logger);
+    }
 }
 
 // ── Split-Audio PoC ──
 
-async Task RunSplitAudio()
+async Task RunSplitAudio(bool liteDb)
 {
     var logger = loggerFactory.CreateLogger("SplitAudio");
-    await using var memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-        loggerFactory.CreateLogger<Neo4jGraphMemory>());
-    await memory.InitialiseSchemaAsync();
+    IGraphMemory memory;
+    if (liteDb)
+    {
+        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "splitaudio.db");
+        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
+        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
+    }
+    else
+    {
+        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
+            loggerFactory.CreateLogger<Neo4jGraphMemory>());
+    }
+    await using (memory)
+    {
+        await memory.InitialiseSchemaAsync();
+        var encoder = new DefaultStateEncoder(embeddingDimension: Fsd50kLoader.FeatureDim);
 
-    var encoder = new DefaultStateEncoder(embeddingDimension: Fsd50kLoader.FeatureDim);
+        string? csvPath = null;
+        for (int i = 1; i < args.Length - 1; i++)
+            if (args[i] == "--data") csvPath = args[i + 1];
 
-    // Check for --data argument
-    string? csvPath = null;
-    for (int i = 1; i < args.Length - 1; i++)
-        if (args[i] == "--data") csvPath = args[i + 1];
+        await SplitAudioDemo.RunAsync(memory, encoder, logger, csvPath);
+    }
+}
 
-    await SplitAudioDemo.RunAsync(memory, encoder, logger, csvPath);
+// ── Compare Backends ──
+
+async Task RunComparison()
+{
+    Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
+    Console.WriteLine("║   Rich Learning — Backend Comparison: Neo4j vs LiteDB       ║");
+    Console.WriteLine("║   Same PoC, different graph stores. Accuracy should match.  ║");
+    Console.WriteLine("╚══════════════════════════════════════════════════════════════╝\n");
+
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    Console.WriteLine("═══ Running Split-MNIST with LiteDB ═══\n");
+    await RunSplitMnist(liteDb: true);
+    sw.Stop();
+    var liteDbTime = sw.Elapsed;
+
+    Console.WriteLine($"\n  LiteDB elapsed: {liteDbTime.TotalSeconds:F1}s\n");
+    Console.WriteLine("────────────────────────────────────────────────────────────────\n");
+
+    Console.WriteLine("═══ Running Split-MNIST with Neo4j ═══\n");
+    sw.Restart();
+    try
+    {
+        await RunSplitMnist(liteDb: false);
+        sw.Stop();
+        var neo4jTime = sw.Elapsed;
+        Console.WriteLine($"\n  Neo4j elapsed: {neo4jTime.TotalSeconds:F1}s");
+        Console.WriteLine($"\n╔═══════════════════════════════════════════════════════════╗");
+        Console.WriteLine($"║  TIMING COMPARISON                                       ║");
+        Console.WriteLine($"╠═══════════════════════════════════════════════════════════╣");
+        Console.WriteLine($"║  LiteDB:  {liteDbTime.TotalSeconds,7:F1}s  (embedded, zero setup)        ║");
+        Console.WriteLine($"║  Neo4j:   {neo4jTime.TotalSeconds,7:F1}s  (server, network I/O)         ║");
+        Console.WriteLine($"╚═══════════════════════════════════════════════════════════╝");
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        Console.WriteLine($"\n  Neo4j unavailable: {ex.Message}");
+        Console.WriteLine("  (Start Neo4j to compare: docker run -p 7474:7474 -p 7687:7687 neo4j)");
+        Console.WriteLine($"\n╔═══════════════════════════════════════════════════════════╗");
+        Console.WriteLine($"║  LiteDB completed in {liteDbTime.TotalSeconds:F1}s — no server needed!       ║");
+        Console.WriteLine($"║  Neo4j: skipped (server not running)                     ║");
+        Console.WriteLine($"╚═══════════════════════════════════════════════════════════╝");
+    }
 }
 
 // ── C# vs Python Benchmark ──
@@ -150,51 +225,67 @@ void RunBenchmark()
 
 // ── Interactive Demo ──
 
-async Task RunDemo()
+async Task RunDemo(bool liteDb)
 {
     Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
     Console.WriteLine("║       Rich Learning — Topological Graph Memory for RL       ║");
-    Console.WriteLine("║       .NET 10 • Neo4j • Continual Learning                  ║");
+    Console.WriteLine($"║       .NET 10 • {(liteDb ? "LiteDB" : "Neo4j ")} • Continual Learning                  ║");
     Console.WriteLine("╚══════════════════════════════════════════════════════════════╝\n");
 
-    await using var memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-        loggerFactory.CreateLogger<Neo4jGraphMemory>());
-    await memory.InitialiseSchemaAsync();
-
-    var encoder = new DefaultStateEncoder(embeddingDimension: 8);
-    var cartographer = new Cartographer(memory, encoder, loggerFactory.CreateLogger<Cartographer>())
+    IGraphMemory memory;
+    if (liteDb)
     {
-        NoveltyThreshold = 0.4
-    };
-
-    var rng2 = new Random(42);
-    const int episodes = 3, steps = 15;
-
-    for (int ep = 0; ep < episodes; ep++)
+        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "demo.db");
+        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
+        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
+    }
+    else
     {
-        Console.WriteLine($"\n-- Episode {ep + 1} --");
-        double[] state = Enumerable.Range(0, 8).Select(_ => rng2.NextDouble()).ToArray();
-
-        string? prevId = null;
-        for (int step = 0; step < steps; step++)
-        {
-            double reward = rng2.NextDouble() * 2.0 - 1.0;
-            string landmarkId = await cartographer.ObserveStateAsync(state, reward);
-
-            if (prevId != null)
-                await cartographer.RecordTransitionAsync(prevId, landmarkId, rng2.Next(4), reward, 1, true);
-            prevId = landmarkId;
-
-            // Perturb state
-            int idx = rng2.Next(8);
-            state[idx] += (rng2.NextDouble() - 0.5) * 0.3;
-        }
+        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
+            loggerFactory.CreateLogger<Neo4jGraphMemory>());
     }
 
-    Console.WriteLine("\n" + await cartographer.GetMapSummaryAsync());
+    await using (memory)
+    {
+        await memory.InitialiseSchemaAsync();
 
-    await memory.AssignClustersAsync();
-    var (lm, tr) = await memory.GetGraphStatsAsync();
-    Console.WriteLine($"Final graph: {lm} landmarks, {tr} transitions");
-    Console.WriteLine("Explore at http://localhost:7474 (Neo4j Browser)");
+        var encoder = new DefaultStateEncoder(embeddingDimension: 8);
+        var cartographer = new Cartographer(memory, encoder, loggerFactory.CreateLogger<Cartographer>())
+        {
+            NoveltyThreshold = 0.4
+        };
+
+        var rng2 = new Random(42);
+        const int episodes = 3, steps = 15;
+
+        for (int ep = 0; ep < episodes; ep++)
+        {
+            Console.WriteLine($"\n-- Episode {ep + 1} --");
+            double[] state = Enumerable.Range(0, 8).Select(_ => rng2.NextDouble()).ToArray();
+
+            string? prevId = null;
+            for (int step = 0; step < steps; step++)
+            {
+                double reward = rng2.NextDouble() * 2.0 - 1.0;
+                string landmarkId = await cartographer.ObserveStateAsync(state, reward);
+
+                if (prevId != null)
+                    await cartographer.RecordTransitionAsync(prevId, landmarkId, rng2.Next(4), reward, 1, true);
+                prevId = landmarkId;
+
+                int idx = rng2.Next(8);
+                state[idx] += (rng2.NextDouble() - 0.5) * 0.3;
+            }
+        }
+
+        Console.WriteLine("\n" + await cartographer.GetMapSummaryAsync());
+
+        await memory.AssignClustersAsync();
+        var (lm, tr) = await memory.GetGraphStatsAsync();
+        Console.WriteLine($"Final graph: {lm} landmarks, {tr} transitions");
+        if (!liteDb)
+            Console.WriteLine("Explore at http://localhost:7474 (Neo4j Browser)");
+        else
+            Console.WriteLine($"Database stored at: {Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "demo.db")}");
+    }
 }
