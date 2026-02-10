@@ -11,14 +11,17 @@
 ## 📖 What is Rich Learning?
 **Rich Learning** is a reinforcement learning paradigm focused on the accumulation of persistent knowledge assets rather than transient weight optimization.
 
-In standard Deep RL, an agent "lives paycheck to paycheck"—often overwriting neural weights to learn new tasks (catastrophic forgetting). **Rich Learning** agents accumulate a **Topological Graph Memory**—a navigable map of the policy-state space stored in a graph database (Neo4j). New experiences *add to* the graph; they never degrade existing structure.
+In standard Deep RL, an agent "lives paycheck to paycheck"—often overwriting neural weights to learn new tasks (catastrophic forgetting). **Rich Learning** agents accumulate a **Topological Graph Memory**—a navigable map of the policy-state space stored in a graph database. New experiences *add to* the graph; they never degrade existing structure.
+
+> **New:** The default backend is now **LiteDB** (embedded, zero-setup). No Neo4j server required — just `dotnet run` and go. Neo4j remains available as an optional backend for production-scale graphs.
 
 ## 🚀 Key Innovations
 This repository contains the reference implementation of the **Rich Learning** architecture, featuring:
 
-* **Topological Graph Memory:** Knowledge is stored as navigable "Landmarks" and "Transitions" in Neo4j, not just neural weights.
+* **Topological Graph Memory:** Knowledge is stored as navigable "Landmarks" and "Transitions" in a graph database, not just neural weights.
 * **Zero Forgetting:** New experiences add nodes and edges; they do not modify existing graph structure.
 * **Explainable Plans:** Navigation through named landmarks, fully auditable.
+* **Zero Setup:** LiteDB embedded backend — no Docker, no server, single `.db` file. Just `dotnet run`.
 * **C# / .NET 10:** Implemented in pure C# with zero Python dependencies, achieving ~30–50× performance gains in RL inner loops.
 
 ### 🏗️ Architecture
@@ -38,7 +41,7 @@ graph LR
         F --> G
     end
 
-    subgraph "Topological Graph Memory · Neo4j"
+    subgraph "Topological Graph Memory · LiteDB / Neo4j"
         G --> H[(Landmarks\n& Transitions)]
         H -->|Query| D
     end
@@ -81,7 +84,7 @@ xychart-beta
 
 ## 🛠️ Tech Stack
 * **Language:** C# 12 / .NET 10 (Zero Python dependencies)
-* **Database:** Neo4j (Graph Persistence)
+* **Database:** LiteDB (default, embedded) · Neo4j (optional, server-based)
 * **Interfaces:** IGraphMemory, IStateEncoder, IExplorationStrategy, Cartographer
 
 ## ⚡ Architectural Note: No Hidden Layers
@@ -126,26 +129,41 @@ graph TB
 ## ⚡ Quick Start
 
 ```bash
-# Prerequisites: .NET 10 SDK, Neo4j 5+
+# Prerequisites: .NET 10 SDK (that's it!)
 
 # Clone and build
 git clone https://github.com/Minu476/rich-learning.git
 cd rich-learning/src/RichLearning
 dotnet build
 
-# Run Split-MNIST (downloads real MNIST, no Neo4j needed for MLP baseline)
-NEO4J_URI="bolt://localhost:7687" NEO4J_USER="neo4j" NEO4J_PASSWORD="password" \
-  dotnet run -- SplitMnist
+# Run Split-MNIST with LiteDB (default — no server needed)
+dotnet run -- SplitMnist --litedb
 
-# Run Split-Audio (FSD50K features — extract first with scripts/extract_fsd50k.py)
-dotnet run -- SplitAudio
+# Run Split-Audio with LiteDB
+dotnet run -- SplitAudio --litedb
+
+# Compare LiteDB vs Neo4j (Neo4j optional)
+dotnet run -- Compare
 
 # C# performance benchmark
 dotnet run -- Benchmark
 
 # Interactive graph exploration demo
-dotnet run -- Demo
+dotnet run -- Demo --litedb
 ```
+
+<details>
+<summary>🔧 Using Neo4j instead (optional)</summary>
+
+```bash
+# Start Neo4j
+docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j
+
+# Run without --litedb to use Neo4j
+NEO4J_URI="bolt://localhost:7687" NEO4J_USER="neo4j" NEO4J_PASSWORD="password" \
+  dotnet run -- SplitMnist
+```
+</details>
 
 ## 📂 Project Structure
 
@@ -154,7 +172,7 @@ rich-learning/
 ├── src/RichLearning/
 │   ├── Abstractions/          # Interfaces (IGraphMemory, IStateEncoder, ...)
 │   ├── Models/                # StateLandmark, StateTransition, SubgoalDirective
-│   ├── Memory/                # Neo4jGraphMemory implementation
+│   ├── Memory/                # LiteDbGraphMemory (default) + Neo4jGraphMemory
 │   ├── Planning/              # Cartographer (mid-level planner)
 │   └── PoC/
 │       ├── SplitMnist/        # Catastrophic forgetting on MNIST digits
@@ -178,6 +196,7 @@ public class MyEncoder : IStateEncoder
 ```
 
 ### Alternative Graph Backend
+Two backends are included: **LiteDB** (embedded, default) and **Neo4j** (server-based).  
 Implement `IGraphMemory` for SQLite, Redis, or in-memory graphs.
 
 ### New PoC
