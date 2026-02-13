@@ -1,30 +1,41 @@
-# Rich Learning: Topological Graph Memory for Lifelong RL
+<div align="center">
+
+# Rich Learning
+
+### 100% knowledge retention. Zero hidden layers. One graph.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18565288.svg)](https://doi.org/10.5281/zenodo.18565288)
-![Energy Efficient](https://img.shields.io/badge/Energy%20Efficiency-High-brightgreen?style=for-the-badge&logo=leaf)
-![Architecture](https://img.shields.io/badge/Hidden%20Layers-None-blue?style=for-the-badge)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Energy Efficient](https://img.shields.io/badge/Energy%20Efficiency-High-brightgreen?logo=leaf)](https://richlearning.ai)
+[![Hidden Layers](https://img.shields.io/badge/Hidden%20Layers-None-orange)]()
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-**Author:** Nasser Towfigh  
-**License:** [Apache 2.0](LICENSE)  
-**Status:** Published Reference Implementation
+**Topological Graph Memory for Lifelong Reinforcement Learning**
+
+[Paper](paper/Rich-Learning-Paper.pdf) · [Website](https://richlearning.ai) · [Docs](https://richlearning.ai/docs/) · [Quick Start](#-quick-start) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+---
+
+> **What if your RL agent never forgot anything it learned?**
+>
+> Standard Deep RL agents "live paycheck to paycheck" — overwriting neural weights to learn new tasks, destroying everything they knew before. Rich Learning agents build a **persistent topological map** of the state space. New experiences *add to* the graph; they never degrade existing structure. The result: **100% retention** on Split-MNIST, compared to 0% for bare MLPs and 19.5% for EWC.
 
 ## 📖 What is Rich Learning?
-**Rich Learning** is a reinforcement learning paradigm focused on the accumulation of persistent knowledge assets rather than transient weight optimization.
 
-In standard Deep RL, an agent "lives paycheck to paycheck"—often overwriting neural weights to learn new tasks (catastrophic forgetting). **Rich Learning** agents accumulate a **Topological Graph Memory**—a navigable map of the policy-state space stored in a graph database. New experiences *add to* the graph; they never degrade existing structure.
+**Rich Learning** is a reinforcement learning paradigm that replaces mutable weight matrices with a navigable **Topological Graph Memory** — landmarks (nodes) and transitions (edges) stored in a graph database. Knowledge accumulates like a growing map, not a rewritable notebook.
 
-> **New:** The default backend is now **LiteDB** (embedded, zero-setup). No Neo4j server required — just `dotnet run` and go. Neo4j remains available as an optional backend for production-scale graphs.
+- **Zero forgetting** — new tasks add subgraphs, existing structure is untouched
+- **Explainable** — every decision traces through named landmarks and edges
+- **Energy efficient** — graph traversal O(1) per hop, not matrix multiplication O(N²)
+- **Edge-device ready** — no GPU, no Python, single `.db` file
+- **Zero setup** — LiteDB embedded backend, just `dotnet run` and go
 
-## 🚀 Key Innovations
-This repository contains the reference implementation of the **Rich Learning** architecture, featuring:
+> Neo4j remains available as an optional backend for production-scale graphs.
 
-* **Topological Graph Memory:** Knowledge is stored as navigable "Landmarks" and "Transitions" in a graph database, not just neural weights.
-* **Zero Forgetting:** New experiences add nodes and edges; they do not modify existing graph structure.
-* **Explainable Plans:** Navigation through named landmarks, fully auditable.
-* **Zero Setup:** LiteDB embedded backend — no Docker, no server, single `.db` file. Just `dotnet run`.
-* **C# / .NET 10:** Implemented in pure C# with zero Python dependencies, achieving ~30–50× performance gains in RL inner loops.
-
-### 🏗️ Architecture
+## 🏗️ Architecture
 
 ```mermaid
 graph LR
@@ -126,6 +137,24 @@ graph TB
     end
 ```
 
+## 💎 Why C#?
+
+Most RL research defaults to Python — so why C#?
+
+| | Python (typical RL) | C# / .NET (Rich Learning) |
+|:---|:---|:---|
+| **Inner-loop speed** | Interpreted, GIL-bound | JIT-compiled, 30–50× faster |
+| **Memory safety** | Manual GC tuning | Deterministic `IAsyncDisposable` |
+| **Type safety** | Runtime errors | Compile-time guarantees |
+| **Deployment** | pip + conda + Docker | Single `dotnet publish` binary |
+| **Edge devices** | Needs Python runtime | Self-contained, no runtime needed |
+| **Async I/O** | asyncio (bolted on) | Native `async/await` since v1 |
+| **GPU required** | Almost always | Never — graph traversal only |
+
+Rich Learning's core operation is **graph traversal**, not matrix multiplication. C#/.NET gives us type-safe, fast, memory-efficient graph operations with zero Python overhead. The result: an RL agent that runs on a Raspberry Pi and benchmarks 30–50× faster than equivalent Python RL inner loops.
+
+> *"We chose C# not despite being an RL project, but because of it. When your algorithm is topology, not tensors, you want a systems language — not a scripting one."*
+
 ## ⚡ Quick Start
 
 ```bash
@@ -211,3 +240,15 @@ If you use this methodology, please cite:
 This project is licensed under **Apache License 2.0**.
 * **Code:** You are free to use, modify, and distribute this software.
 * **Patents:** This license grants an explicit patent grant for the *specific implementation* provided here.
+
+---
+
+<div align="center">
+
+**Built by [Nasser Towfigh](https://github.com/Minu476)**
+
+If this project is useful to you, please consider giving it a ⭐
+
+[Report Bug](https://github.com/Minu476/rich-learning/issues/new?template=bug_report.md) · [Request Feature](https://github.com/Minu476/rich-learning/issues/new?template=feature_request.md)
+
+</div>

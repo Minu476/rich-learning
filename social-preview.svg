@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0a"/>
+      <stop offset="100%" style="stop-color:#111111"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff88;stop-opacity:0.08"/>
+      <stop offset="60%" style="stop-color:#00ff88;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="600" height="630" fill="url(#glow)"/>
+
+  <!-- Border accent -->
+  <rect x="0" y="0" width="1200" height="4" fill="#00ff88" opacity="0.6"/>
+
+  <!-- Graph visualization (topological memory) -->
+  <!-- Nodes -->
+  <circle cx="900" cy="180" r="12" fill="#00ff88" opacity="0.9"/>
+  <circle cx="980" cy="140" r="10" fill="#00ff88" opacity="0.7"/>
+  <circle cx="1050" cy="200" r="11" fill="#00ff88" opacity="0.8"/>
+  <circle cx="940" cy="260" r="13" fill="#00ff88" opacity="0.9"/>
+  <circle cx="1020" cy="310" r="10" fill="#00ff88" opacity="0.6"/>
+  <circle cx="870" cy="320" r="11" fill="#00ff88" opacity="0.7"/>
+  <circle cx="1100" cy="280" r="9" fill="#00ff88" opacity="0.5"/>
+  <circle cx="850" cy="240" r="8" fill="#00ff88" opacity="0.4"/>
+  <circle cx="1060" cy="140" r="7" fill="#00ff88" opacity="0.4"/>
+  <circle cx="990" cy="350" r="8" fill="#00ff88" opacity="0.5"/>
+
+  <!-- Edges -->
+  <line x1="900" y1="180" x2="980" y2="140" stroke="#00ff88" stroke-width="1.5" opacity="0.3"/>
+  <line x1="980" y1="140" x2="1050" y2="200" stroke="#00ff88" stroke-width="1.5" opacity="0.3"/>
+  <line x1="900" y1="180" x2="940" y2="260" stroke="#00ff88" stroke-width="2" opacity="0.4"/>
+  <line x1="940" y1="260" x2="1020" y2="310" stroke="#00ff88" stroke-width="1.5" opacity="0.3"/>
+  <line x1="1050" y1="200" x2="1100" y2="280" stroke="#00ff88" stroke-width="1" opacity="0.25"/>
+  <line x1="940" y1="260" x2="870" y2="320" stroke="#00ff88" stroke-width="1.5" opacity="0.3"/>
+  <line x1="1050" y1="200" x2="940" y2="260" stroke="#00ff88" stroke-width="1" opacity="0.25"/>
+  <line x1="850" y1="240" x2="900" y2="180" stroke="#00ff88" stroke-width="1" opacity="0.2"/>
+  <line x1="980" y1="140" x2="1060" y2="140" stroke="#00ff88" stroke-width="1" opacity="0.2"/>
+  <line x1="1020" y1="310" x2="990" y2="350" stroke="#00ff88" stroke-width="1" opacity="0.2"/>
+  <line x1="1020" y1="310" x2="1100" y2="280" stroke="#00ff88" stroke-width="1" opacity="0.2"/>
+  <line x1="870" y1="320" x2="990" y2="350" stroke="#00ff88" stroke-width="1" opacity="0.2"/>
+
+  <!-- Title -->
+  <text x="80" y="200" font-family="system-ui, -apple-system, sans-serif" font-size="64" font-weight="700" fill="#e0e0e0">Rich Learning</text>
+
+  <!-- Subtitle -->
+  <text x="80" y="260" font-family="system-ui, -apple-system, sans-serif" font-size="24" fill="#888888">Topological Graph Memory for Lifelong RL</text>
+
+  <!-- Key stats -->
+  <text x="80" y="340" font-family="'Courier New', monospace" font-size="20" fill="#00ff88">100% Retention</text>
+  <text x="300" y="340" font-family="'Courier New', monospace" font-size="20" fill="#555555">·</text>
+  <text x="330" y="340" font-family="'Courier New', monospace" font-size="20" fill="#00ff88">Zero Hidden Layers</text>
+  <text x="600" y="340" font-family="'Courier New', monospace" font-size="20" fill="#555555">·</text>
+  <text x="630" y="340" font-family="'Courier New', monospace" font-size="20" fill="#00ff88">One Graph</text>
+
+  <!-- Retention bar chart -->
+  <!-- Labels -->
+  <text x="80" y="420" font-family="system-ui, sans-serif" font-size="14" fill="#666666">Bare MLP</text>
+  <text x="80" y="460" font-family="system-ui, sans-serif" font-size="14" fill="#666666">EWC</text>
+  <text x="80" y="500" font-family="system-ui, sans-serif" font-size="14" fill="#00ff88" font-weight="600">Rich Learning</text>
+
+  <!-- Bars -->
+  <rect x="200" y="407" width="2" height="16" rx="2" fill="#ff4444" opacity="0.6"/>
+  <text x="210" y="420" font-family="'Courier New', monospace" font-size="12" fill="#ff4444" opacity="0.6">0%</text>
+
+  <rect x="200" y="447" width="78" height="16" rx="2" fill="#f5a623" opacity="0.6"/>
+  <text x="285" y="460" font-family="'Courier New', monospace" font-size="12" fill="#f5a623" opacity="0.6">19.5%</text>
+
+  <rect x="200" y="487" width="400" height="16" rx="2" fill="#00ff88" opacity="0.8"/>
+  <text x="608" y="500" font-family="'Courier New', monospace" font-size="12" fill="#00ff88">100%</text>
+
+  <!-- Tech badges -->
+  <text x="80" y="570" font-family="'Courier New', monospace" font-size="14" fill="#444444">C# · .NET 10 · LiteDB · Neo4j · Apache 2.0</text>
+
+  <!-- URL -->
+  <text x="80" y="600" font-family="'Courier New', monospace" font-size="14" fill="#00ff88" opacity="0.6">github.com/Minu476/rich-learning</text>
+</svg>
