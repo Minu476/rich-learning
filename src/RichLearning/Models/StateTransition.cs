@@ -2,7 +2,18 @@ namespace RichLearning.Models;
 
 /// <summary>
 /// Represents a directed edge (transition) between two StateLandmarks.
-/// Carries action, reward, and traversal statistics.
+/// Carries action, reward, traversal statistics, and confidence.
+///
+/// From the Rich Learning paper (Definition 4):
+///   A Transition τ = (ℓ_src, ℓ_tgt, a, r̄, n, κ, δ) where:
+///     a ∈ A    : Primary action
+///     r̄ ∈ ℝ    : Mean reward
+///     n ∈ ℕ    : Traversal count
+///     κ ∈ [0,1]: Confidence (grows with successful traversals)
+///     δ ∈ ℝ    : TD-error for prioritised replay
+///
+/// Transitions also support macro-edges (compressed skills) where a single
+/// edge represents a sequence of primitive transitions.
 /// </summary>
 public sealed record StateTransition
 {

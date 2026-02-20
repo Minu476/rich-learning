@@ -17,6 +17,7 @@ public interface IFrontierScorer
 
 /// <summary>
 /// Decides whether a new observation is novel enough to create a new landmark.
+/// This is the "granularity knob" of the topological graph.
 /// </summary>
 public interface INoveltyGate
 {
@@ -41,6 +42,7 @@ public interface IPrioritySampler
 
 /// <summary>
 /// Strategy for escaping detected trajectory loops.
+/// Different domains may require different escape heuristics.
 /// </summary>
 public interface ILoopEscapeStrategy
 {

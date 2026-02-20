@@ -5,6 +5,7 @@ using RichLearning.Memory;
 using RichLearning.Planning;
 using RichLearning.PoC.SplitMnist;
 using RichLearning.PoC.SplitAudio;
+using RichLearning.Visualization;
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Rich Learning — Continual RL with Topological Graph Memory
@@ -17,6 +18,8 @@ using RichLearning.PoC.SplitAudio;
 //    dotnet run -- SplitAudio --litedb    # Split-Audio PoC (LiteDB)
 //    dotnet run -- Compare                # Run both backends and compare results
 //    dotnet run -- Benchmark              # C# vs Python speed benchmark
+//    dotnet run -- Explore --litedb         # Visual graph explorer in browser
+//    dotnet run -- Explore                  # Graph explorer (Neo4j)
 //
 //  Environment (Neo4j only):
 //    NEO4J_URI=bolt://localhost:7687
@@ -50,6 +53,9 @@ switch (command)
         break;
     case "benchmark":
         RunBenchmark();
+        break;
+    case "explore":
+        await RunExplore(useLiteDb);
         break;
     default:
         await RunDemo(useLiteDb);
@@ -250,10 +256,8 @@ async Task RunDemo(bool liteDb)
         await memory.InitialiseSchemaAsync();
 
         var encoder = new DefaultStateEncoder(embeddingDimension: 8);
-        var cartographer = new Cartographer(memory, encoder, loggerFactory.CreateLogger<Cartographer>())
-        {
-            NoveltyThreshold = 0.4
-        };
+        Cartographer.DefaultNoveltyThreshold = 0.4;
+        var cartographer = new Cartographer(memory, encoder);
 
         var rng2 = new Random(42);
         const int episodes = 3, steps = 15;
@@ -267,10 +271,10 @@ async Task RunDemo(bool liteDb)
             for (int step = 0; step < steps; step++)
             {
                 double reward = rng2.NextDouble() * 2.0 - 1.0;
-                string landmarkId = await cartographer.ObserveStateAsync(state, reward);
+                string landmarkId = await cartographer.ObserveStateAsync(state);
 
                 if (prevId != null)
-                    await cartographer.RecordTransitionAsync(prevId, landmarkId, rng2.Next(4), reward, 1, true);
+                    await cartographer.RecordTransitionAsync(prevId, landmarkId, rng2.Next(4), reward, true);
                 prevId = landmarkId;
 
                 int idx = rng2.Next(8);
@@ -287,5 +291,66 @@ async Task RunDemo(bool liteDb)
             Console.WriteLine("Explore at http://localhost:7474 (Neo4j Browser)");
         else
             Console.WriteLine($"Database stored at: {Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "demo.db")}");
+
+        Console.WriteLine("\n  Tip: run  dotnet run -- Explore --litedb  to visualise this graph.");
+    }
+}
+
+// ── Graph Explorer ──
+
+async Task RunExplore(bool liteDb)
+{
+    Console.WriteLine("╔════════════════════════════════════════════════════════════════╗");
+    Console.WriteLine("║   Rich Learning — Graph Explorer                             ║");
+    Console.WriteLine("║   Interactive topological map visualisation in your browser   ║");
+    Console.WriteLine("╚════════════════════════════════════════════════════════════════╝\n");
+
+    IGraphMemory memory;
+    if (liteDb)
+    {
+        string? dbPath = null;
+        for (int i = 1; i < args.Length - 1; i++)
+            if (args[i] == "--db") dbPath = args[i + 1];
+
+        if (dbPath == null)
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var candidates = new[] { "splitmnist.db", "demo.db", "splitaudio.db" };
+            foreach (var name in candidates)
+            {
+                var path = Path.Combine(baseDir, name);
+                if (File.Exists(path)) { dbPath = path; break; }
+            }
+        }
+
+        if (dbPath == null || !File.Exists(dbPath))
+        {
+            Console.WriteLine("  No database found. Run a PoC first:");
+            Console.WriteLine("    dotnet run -- SplitMnist --litedb");
+            Console.WriteLine("    dotnet run -- Demo --litedb");
+            return;
+        }
+
+        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
+        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
+    }
+    else
+    {
+        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
+            loggerFactory.CreateLogger<Neo4jGraphMemory>());
+        Console.WriteLine($"  [Backend] Neo4j → {neo4jUri}\n");
+    }
+
+    await using (memory)
+    {
+        await memory.InitialiseSchemaAsync();
+
+        // Build hierarchical meta-levels (Scout → Region → Domain)
+        Console.WriteLine("  Building meta-level hierarchy...");
+        var builder = new MetaLevelBuilder(memory);
+        var report = await builder.BuildAllLevelsAsync();
+        Console.WriteLine($"  {report}\n");
+
+        await GraphExplorerServer.RunAsync(memory);
     }
 }

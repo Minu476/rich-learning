@@ -35,6 +35,28 @@
 
 > Neo4j remains available as an optional backend for production-scale graphs.
 
+## 🧠 Core Components (New in v2.0)
+
+The latest version introduces domain-agnostic cognitive architecture components:
+
+### 1. **DAPSA Engine** (Domain-Agnostic Pattern-Seeking Agent)
+The cognitive loop that drives the agent:
+- **Perceive:** Encode raw state into embedding.
+- **Query:** Check Passive Memory (Graph) for known landmarks.
+- **Check Consonance:** Is the state novel or surprising? (Novelty Gating)
+- **Act:** Execute policy or explore frontier.
+- **Learn:** Update value estimates and transition probabilities.
+- **Fossilize:** Convert successful trajectories into permanent skills.
+
+### 2. **Active Memory (Trajectory DAG)**
+Short-term memory that tracks the current episode as a Directed Acyclic Graph. It enables loop detection, backtracking, and immediate credit assignment before committing to long-term usage.
+
+### 3. **Fossilization**
+A mechanism to "solidify" frequently traversed and high-value paths into optimized macro-actions or skills, reducing the search space for future planning.
+
+### 4. **Agent Efficiency Tracker**
+Real-time metrics on novelty discovery rate, value estimation accuracy, and graph expansion efficiency.
+
 ## 🏗️ Architecture
 
 ```mermaid

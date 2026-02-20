@@ -65,7 +65,8 @@ public sealed class LiteDbGraphMemory : IGraphMemory
             ChildNodeIds = landmark.ChildNodeIds.ToList(),
             ActionCounts = landmark.ActionCounts,
             LastVisitedTimestep = landmark.LastVisitedTimestep,
-            CreatedTimestep = landmark.CreatedTimestep
+            CreatedTimestep = landmark.CreatedTimestep,
+            Metadata = landmark.Metadata.ToDictionary(k => k.Key, v => v.Value?.ToString() ?? "")
         };
 
         var existing = _landmarks.FindOne(x => x.LandmarkId == landmark.Id);
@@ -88,9 +89,13 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         return Task.FromResult(doc != null ? MapToLandmark(doc) : (StateLandmark?)null);
     }
 
-    public Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync()
+    public Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync(int? hierarchyLevel = null)
     {
-        var all = _landmarks.FindAll().Select(MapToLandmark).ToList();
+        var query = _landmarks.Query();
+        if (hierarchyLevel.HasValue)
+            query = query.Where(x => x.HierarchyLevel == hierarchyLevel.Value);
+            
+        var all = query.ToEnumerable().Select(MapToLandmark).ToList();
         return Task.FromResult<IReadOnlyList<StateLandmark>>(all);
     }
 
@@ -399,7 +404,8 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         ChildNodeIds = doc.ChildNodeIds,
         LastVisitedTimestep = doc.LastVisitedTimestep,
         CreatedTimestep = doc.CreatedTimestep,
-        ActionCounts = doc.ActionCounts ?? new()
+        ActionCounts = doc.ActionCounts ?? new(),
+        Metadata = doc.Metadata?.ToDictionary(k => k.Key, v => (object)v) ?? new()
     };
 
     private static StateTransition MapToTransition(TransitionDoc doc) => new()
@@ -438,6 +444,7 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         public Dictionary<int, int> ActionCounts { get; set; } = new();
         public long LastVisitedTimestep { get; set; }
         public long CreatedTimestep { get; set; }
+        public Dictionary<string, string> Metadata { get; set; } = new();
     }
 
     internal class TransitionDoc

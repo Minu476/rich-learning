@@ -6,8 +6,24 @@ namespace RichLearning.Abstractions;
 /// Interface for graph-backed memory that stores and retrieves
 /// landmarks (nodes) and transitions (edges) forming a topological map
 /// of the state space.
-/// 
-/// Implementations may use Neo4j, in-memory graphs, SQLite, etc.
+///
+/// This is the central persistence abstraction in Rich Learning.
+/// The graph stores WHAT the agent knows — independent of HOW it acts.
+///
+/// Key operations:
+///   - Upsert/Get landmarks and transitions
+///   - Nearest-neighbour search for novelty gating
+///   - Shortest-path planning
+///   - Cycle detection in trajectories
+///   - Frontier discovery for exploration
+///   - Prioritised replay sampling
+///   - Community detection (clustering)
+///
+/// Implementations:
+///   - InMemoryGraphMemory: zero-dependency, in-process (default for PoCs)
+///   - LiteDbGraphMemory: embedded NoSQL, persistent, zero-setup
+///   - Neo4jGraphMemory: server-mode, Cypher-native, production-grade
+///   - Domain-specific: DuckDB for analytics, Redis for distributed, etc.
 /// </summary>
 public interface IGraphMemory : IAsyncDisposable
 {
@@ -22,8 +38,8 @@ public interface IGraphMemory : IAsyncDisposable
     /// <summary>Get a landmark by ID. Returns null if not found.</summary>
     Task<StateLandmark?> GetLandmarkAsync(string id);
 
-    /// <summary>Get all landmarks.</summary>
-    Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync();
+    /// <summary>Get all landmarks (optionally filtered by hierarchy level).</summary>
+    Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync(int? hierarchyLevel = null);
 
     /// <summary>
     /// Find the nearest landmark to the given embedding.
@@ -61,7 +77,7 @@ public interface IGraphMemory : IAsyncDisposable
 
     // ── Graph Maintenance ──
 
-    /// <summary>Assign cluster IDs using community detection.</summary>
+    /// <summary>Assign cluster IDs using community detection (label propagation).</summary>
     Task AssignClustersAsync(int rounds = 5);
 
     /// <summary>Get basic graph statistics: (landmarkCount, transitionCount).</summary>

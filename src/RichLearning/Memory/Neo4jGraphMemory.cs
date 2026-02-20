@@ -54,6 +54,7 @@ public sealed class Neo4jGraphMemory : IGraphMemory
     {
         await using var session = GetSession();
         var actionCountsJson = System.Text.Json.JsonSerializer.Serialize(landmark.ActionCounts);
+        var metadataJson = System.Text.Json.JsonSerializer.Serialize(landmark.Metadata);
 
         await session.ExecuteWriteAsync(async tx =>
         {
@@ -70,7 +71,8 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     l.childNodeIds      = $childNodeIds,
                     l.actionCountsJson  = $actionCountsJson,
                     l.lastVisited       = $lastVisited,
-                    l.createdTimestep   = $createdTimestep
+                    l.createdTimestep   = $createdTimestep,
+                    l.metadataJson      = $metadataJson
                 """,
                 new
                 {
@@ -85,7 +87,8 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     childNodeIds = landmark.ChildNodeIds.ToList(),
                     actionCountsJson,
                     lastVisited = landmark.LastVisitedTimestep,
-                    createdTimestep = landmark.CreatedTimestep
+                    createdTimestep = landmark.CreatedTimestep,
+                    metadataJson
                 });
         });
     }
@@ -106,12 +109,17 @@ public sealed class Neo4jGraphMemory : IGraphMemory
         });
     }
 
-    public async Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync()
+    public async Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync(int? hierarchyLevel = null)
     {
         await using var session = GetSession();
         return await session.ExecuteReadAsync(async tx =>
         {
-            var cursor = await tx.RunAsync("MATCH (l:Landmark) RETURN l");
+            var query = hierarchyLevel.HasValue
+                ? "MATCH (l:Landmark) WHERE l.hierarchyLevel = $hl RETURN l"
+                : "MATCH (l:Landmark) RETURN l";
+
+            var p = hierarchyLevel.HasValue ? new { hl = hierarchyLevel.Value } : null;
+            var cursor = await tx.RunAsync(query, p);
             var list = new List<StateLandmark>();
             while (await cursor.FetchAsync())
             {
@@ -470,10 +478,9 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                 dict[cid] = new ClusterStats
                 {
                     ClusterId = cid,
-                    NodeCount = r["cnt"].As<int>(),
-                    MeanVisitCount = r["avgVisits"].As<double>(),
-                    MeanNoveltyScore = r["avgNovelty"].As<double>(),
-                    MeanValueEstimate = r["avgValue"].As<double>()
+                    LandmarkCount = r["cnt"].As<int>(),
+                    MeanValue = r["avgValue"].As<double>(),
+                    MeanNovelty = r["avgNovelty"].As<double>()
                 };
             }
             return (IReadOnlyDictionary<int, ClusterStats>)dict;
@@ -499,6 +506,18 @@ public sealed class Neo4jGraphMemory : IGraphMemory
             ? node["childNodeIds"].As<List<string>>()
             : new List<string>();
 
+        var metadata = new Dictionary<string, object>();
+        if (node.Properties.ContainsKey("metadataJson"))
+        {
+            var json = node["metadataJson"].As<string>();
+            if (!string.IsNullOrEmpty(json))
+            {
+                var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                if (parsed != null)
+                    metadata = parsed.ToDictionary(k => k.Key, v => (object)v.Value);
+            }
+        }
+
         return new StateLandmark
         {
             Id = node["id"].As<string>(),
@@ -514,7 +533,8 @@ public sealed class Neo4jGraphMemory : IGraphMemory
             ChildNodeIds = childIds,
             LastVisitedTimestep = node["lastVisited"].As<long>(),
             CreatedTimestep = node["createdTimestep"].As<long>(),
-            ActionCounts = actionCounts
+            ActionCounts = actionCounts,
+            Metadata = metadata
         };
     }
 

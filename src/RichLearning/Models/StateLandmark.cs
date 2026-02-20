@@ -3,10 +3,22 @@ namespace RichLearning.Models;
 /// <summary>
 /// Represents a landmark node in the topological state-space graph.
 /// Landmarks are sparsely sampled states that form the skeleton of the "map."
+///
+/// From the Rich Learning paper (Definition 3):
+///   A Landmark ℓ = (id, e, n, V, ν, σ, c) where:
+///     e ∈ ℝ^d  : Dense embedding φ(s) from a state encoder
+///     n ∈ ℕ    : Visit count (familiarity)
+///     V ∈ ℝ    : Running value estimate
+///     ν ∈ [0,1]: Novelty score (decays with visits)
+///     σ ∈ [0,1]: Uncertainty (inverse confidence)
+///     c ∈ ℕ    : Cluster ID (community assignment)
+///
+/// Landmarks are append-only: new experiences add new landmarks,
+/// never overwrite existing ones. This is the Zero Forgetting guarantee.
 /// </summary>
 public sealed record StateLandmark
 {
-    /// <summary>Unique identifier (hash of abstracted state).</summary>
+    /// <summary>Unique identifier (SHA-256 hash of abstracted state).</summary>
     public required string Id { get; init; }
 
     /// <summary>Dense vector embedding φ(s) ∈ ℝ^d produced by the state encoder.</summary>
@@ -81,13 +93,19 @@ public sealed record StateLandmark
 
     // ── Episodic Traces ──
 
-    /// <summary>
-    /// Compressed episodic traces passing through this landmark.
-    /// </summary>
+    /// <summary>Compressed episodic traces passing through this landmark.</summary>
     public List<EpisodicTrace> EpisodicTraces { get; init; } = new();
 
     /// <summary>Maximum number of episodic traces to retain per node.</summary>
     public const int MaxEpisodicTraces = 10;
+
+    // ── Domain Extension ──
+
+    /// <summary>
+    /// Optional domain-specific metadata. Domain implementations can store
+    /// additional properties here without modifying the base model.
+    /// </summary>
+    public Dictionary<string, object> Metadata { get; init; } = new();
 }
 
 /// <summary>

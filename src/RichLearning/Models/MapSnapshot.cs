@@ -1,50 +1,45 @@
 namespace RichLearning.Models;
 
 /// <summary>
-/// A snapshot of the graph's state — the agent's situational awareness of the map.
+/// A subgoal directive issued by the Cartographer.
+/// Represents the next waypoint the worker should navigate toward.
 /// </summary>
-public sealed record MapSnapshot
+public sealed record SubgoalDirective
 {
-    /// <summary>Total number of landmark nodes in the graph.</summary>
-    public int TotalLandmarks { get; init; }
+    /// <summary>Target landmark ID to navigate toward.</summary>
+    public required string TargetLandmarkId { get; init; }
 
-    /// <summary>Total number of transition edges in the graph.</summary>
-    public int TotalTransitions { get; init; }
+    /// <summary>Distance from current position (graph hops or embedding distance).</summary>
+    public double Distance { get; init; }
 
-    /// <summary>Average visit count across all landmarks.</summary>
-    public double MeanVisitCount { get; init; }
+    /// <summary>Reason for selecting this subgoal (for explainability).</summary>
+    public string Reason { get; init; } = string.Empty;
 
-    /// <summary>Average novelty score across all landmarks.</summary>
-    public double MeanNoveltyScore { get; init; }
-
-    /// <summary>Number of distinct cluster regions discovered.</summary>
-    public int ClusterCount { get; init; }
-
-    /// <summary>Per-cluster statistics.</summary>
-    public IReadOnlyDictionary<int, ClusterStats> Clusters { get; init; }
-        = new Dictionary<int, ClusterStats>();
-
-    /// <summary>Frontier (leaf) landmarks.</summary>
-    public IReadOnlyList<StateLandmark> FrontierNodes { get; init; } = [];
-
-    /// <summary>Bottleneck (bridge) landmarks.</summary>
-    public IReadOnlyList<StateLandmark> BottleneckNodes { get; init; } = [];
-
-    /// <summary>Stale (unvisited) landmarks at risk of forgetting.</summary>
-    public IReadOnlyList<StateLandmark> StaleNodes { get; init; } = [];
-
-    /// <summary>Current timestep when this snapshot was taken.</summary>
-    public long Timestep { get; init; }
+    /// <summary>Planned path of landmark IDs from current position to target.</summary>
+    public IReadOnlyList<string> PlannedPath { get; init; } = [];
 }
 
 /// <summary>
-/// Aggregated statistics for a single cluster region.
+/// Summary statistics of the topological map at a point in time.
+/// </summary>
+public sealed record MapSnapshot
+{
+    public int LandmarkCount { get; init; }
+    public int TransitionCount { get; init; }
+    public int ClusterCount { get; init; }
+    public double MeanNovelty { get; init; }
+    public double MeanValueEstimate { get; init; }
+    public double MeanPolicyEntropy { get; init; }
+    public IReadOnlyList<ClusterStats> Clusters { get; init; } = [];
+}
+
+/// <summary>
+/// Statistics for a single cluster (community) in the graph.
 /// </summary>
 public sealed record ClusterStats
 {
     public int ClusterId { get; init; }
-    public int NodeCount { get; init; }
-    public double MeanVisitCount { get; init; }
-    public double MeanNoveltyScore { get; init; }
-    public double MeanValueEstimate { get; init; }
+    public int LandmarkCount { get; init; }
+    public double MeanValue { get; init; }
+    public double MeanNovelty { get; init; }
 }

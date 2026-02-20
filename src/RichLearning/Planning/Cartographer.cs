@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Logging;
 using RichLearning.Abstractions;
 using RichLearning.Models;
 
@@ -8,224 +7,250 @@ namespace RichLearning.Planning;
 
 /// <summary>
 /// Mid-level planner that maintains and queries the topological state-space map.
-/// 
-/// Responsibilities:
-///   - Decides when to create new landmark nodes (novelty gating)
-///   - Updates node/edge statistics after each transition
-///   - Plans shortest-path routes between landmarks
-///   - Detects and breaks trajectory loops
-///   - Identifies exploration frontiers
+///
+/// The Cartographer is the central component of Rich Learning. It provides
+/// domain-agnostic graph management operations:
+///
+///   - ObserveState: novelty gating → create new landmark or update existing
+///   - RecordTransition: record (state, action, reward, next_state) edge
+///   - DetectAndBreakLoop: cycle detection with escape-to-frontier
+///   - SelectNextSubgoal: exploration strategy (loops + frontiers)
+///   - PlanPath: shortest-path planning to a target landmark
+///   - GetMapSummary: diagnostic reporting
+///
+/// Domain implementations extend Cartographer by injecting domain-specific:
+///   - IStateEncoder: how to transform observations into embeddings
+///   - INoveltyGate: what counts as "novel enough" to create a new landmark
+///   - ILoopEscapeStrategy: how to escape detected loops
+///   - IGraphMemory: where to persist the graph (Neo4j, LiteDB, in-memory)
+///
+/// The Cartographer never makes domain-specific decisions. It IS the "map."
+/// The "territory" (domain) is abstracted through the interfaces.
 /// </summary>
-public sealed class Cartographer
+public class Cartographer
 {
     private readonly IGraphMemory _memory;
     private readonly IStateEncoder _encoder;
-    private readonly ILogger<Cartographer> _logger;
-
-    /// <summary>Minimum distance to nearest landmark to create a new one.</summary>
-    public double NoveltyThreshold { get; set; } = 0.3;
-
-    /// <summary>EMA factor for value estimate updates.</summary>
-    public double ValueEmaAlpha { get; set; } = 0.1;
-
-    /// <summary>Novelty decay rate per visit.</summary>
-    public double NoveltyDecayRate { get; set; } = 0.05;
-
-    /// <summary>Number of recent landmark IDs for loop detection.</summary>
-    public int TrajectoryWindowSize { get; set; } = 20;
-
-    private readonly LinkedList<string> _trajectoryWindow = new();
+    private readonly INoveltyGate _noveltyGate;
+    private readonly ILoopEscapeStrategy? _loopEscape;
+    private readonly List<string> _trajectory = new();
     private long _timestep;
+
+    /// <summary>Novelty threshold for the default gate if none provided.</summary>
+    public static double DefaultNoveltyThreshold { get; set; } = 0.3;
 
     public Cartographer(
         IGraphMemory memory,
         IStateEncoder encoder,
-        ILogger<Cartographer> logger)
+        INoveltyGate? noveltyGate = null,
+        ILoopEscapeStrategy? loopEscape = null)
     {
         _memory = memory;
         _encoder = encoder;
-        _logger = logger;
+        _noveltyGate = noveltyGate ?? new DefaultNoveltyGate(DefaultNoveltyThreshold);
+        _loopEscape = loopEscape;
     }
-
-    // ── Observe a State ──
 
     /// <summary>
     /// Process a new state observation. Creates a new landmark if novel enough,
     /// or updates the nearest existing one. Returns the landmark ID.
     /// </summary>
-    public async Task<string> ObserveStateAsync(double[] rawState, double reward = 0.0)
+    public async Task<string> ObserveStateAsync(double[] rawState)
     {
         _timestep++;
         var embedding = _encoder.Encode(rawState);
         var nearest = await _memory.NearestNeighbourAsync(embedding, _encoder);
 
-        string landmarkId;
-
-        if (nearest is null || nearest.Value.Distance > NoveltyThreshold)
+        if (nearest is null || _noveltyGate.ShouldCreateLandmark(nearest.Value.Distance))
         {
-            // Novel enough → create a new landmark.
-            landmarkId = ComputeStateHash(embedding);
+            // Novel state — create new landmark
+            var id = ComputeStateHash(embedding);
             var landmark = new StateLandmark
             {
-                Id = landmarkId,
+                Id = id,
                 Embedding = embedding,
                 VisitCount = 1,
-                ValueEstimate = reward,
                 NoveltyScore = 1.0,
-                ClusterId = 0,
+                UncertaintyScore = 1.0,
+                HierarchyLevel = 0,
+                CreatedTimestep = _timestep,
                 LastVisitedTimestep = _timestep,
-                CreatedTimestep = _timestep
             };
             await _memory.UpsertLandmarkAsync(landmark);
-            _logger.LogInformation("Created landmark {Id} (dist={Dist:F3})",
-                landmarkId, nearest?.Distance ?? double.NaN);
+            _trajectory.Add(id);
+            return id;
         }
         else
         {
-            // Close to existing → update.
-            var existing = nearest.Value.Landmark;
-            landmarkId = existing.Id;
-            existing.VisitCount++;
-            existing.LastVisitedTimestep = _timestep;
-            existing.NoveltyScore *= (1.0 - NoveltyDecayRate);
-            existing.ValueEstimate += ValueEmaAlpha * (reward - existing.ValueEstimate);
-            await _memory.UpsertLandmarkAsync(existing);
+            // Known state — update existing landmark
+            var lm = nearest.Value.Landmark;
+            lm.VisitCount++;
+            lm.LastVisitedTimestep = _timestep;
+            lm.NoveltyScore = 1.0 / (1 + Math.Log(1 + lm.VisitCount));
+            lm.UncertaintyScore = 1.0 / Math.Sqrt(1 + lm.VisitCount);
+            await _memory.UpsertLandmarkAsync(lm);
+            _trajectory.Add(lm.Id);
+            return lm.Id;
         }
-
-        _trajectoryWindow.AddLast(landmarkId);
-        while (_trajectoryWindow.Count > TrajectoryWindowSize)
-            _trajectoryWindow.RemoveFirst();
-
-        return landmarkId;
     }
 
-    // ── Record a Transition ──
-
     /// <summary>
-    /// Record a transition after the worker executes an action.
+    /// Record a transition after the agent executes an action.
     /// </summary>
     public async Task RecordTransitionAsync(
-        string fromId, string toId,
-        int action, double reward, int primitiveSteps, bool success)
+        string fromId, string toId, int action, double reward, bool success = true)
     {
-        var existingEdges = await _memory.GetOutgoingTransitionsAsync(fromId);
-        var existing = existingEdges.FirstOrDefault(e => e.TargetId == toId && e.Action == action);
+        var existing = await _memory.GetOutgoingTransitionsAsync(fromId);
+        var match = existing.FirstOrDefault(t => t.TargetId == toId && t.Action == action);
 
-        StateTransition transition;
-        if (existing is not null)
+        if (match is not null)
         {
-            int newCount = existing.TransitionCount + 1;
-            transition = existing with
+            // Update existing transition
+            int prevCount = match.TransitionCount;
+            match.TransitionCount = prevCount + 1;
+            match.Reward = (match.Reward * prevCount + reward) / (prevCount + 1);
+            match.SuccessRate = (match.SuccessRate * prevCount + (success ? 1.0 : 0.0)) / (prevCount + 1);
+            match.Confidence = 1.0 - 1.0 / Math.Sqrt(1 + match.TransitionCount);
+            match.LastTrainedTimestep = _timestep;
+
+            // Update action counts
+            match.ActionCounts.TryGetValue(action, out var count);
+            match.ActionCounts[action] = count + 1;
+
+            // Update TD-error
+            var fromLm = await _memory.GetLandmarkAsync(fromId);
+            var toLm = await _memory.GetLandmarkAsync(toId);
+            if (fromLm is not null && toLm is not null)
             {
-                Reward = existing.Reward + (reward - existing.Reward) / newCount,
-                TransitionCount = newCount,
-                SuccessRate = existing.SuccessRate + (Convert.ToDouble(success) - existing.SuccessRate) / newCount,
-                TemporalDistance = (existing.TemporalDistance + primitiveSteps) / 2,
-                LastTrainedTimestep = _timestep
-            };
+                double gamma = 0.99;
+                double target = reward + gamma * toLm.ValueEstimate;
+                match.TdError = target - fromLm.ValueEstimate;
+            }
+
+            await _memory.UpsertTransitionAsync(match);
         }
         else
         {
-            transition = new StateTransition
+            // Create new transition
+            var transition = new StateTransition
             {
                 SourceId = fromId,
                 TargetId = toId,
                 Action = action,
                 Reward = reward,
-                TransitionCount = 1,
                 SuccessRate = success ? 1.0 : 0.0,
-                TemporalDistance = primitiveSteps,
-                TdError = Math.Abs(reward),
-                LastTrainedTimestep = _timestep
+                Confidence = 0.5,
+                TransitionCount = 1,
+                LastTrainedTimestep = _timestep,
+                ActionCounts = new Dictionary<int, int> { [action] = 1 },
             };
+            await _memory.UpsertTransitionAsync(transition);
         }
 
-        await _memory.UpsertTransitionAsync(transition);
+        // Update source landmark action counts
+        var sourceLm = await _memory.GetLandmarkAsync(fromId);
+        if (sourceLm is not null)
+        {
+            sourceLm.ActionCounts.TryGetValue(action, out var ac);
+            sourceLm.ActionCounts[action] = ac + 1;
+            await _memory.UpsertLandmarkAsync(sourceLm);
+        }
     }
-
-    // ── Loop Detection ──
 
     /// <summary>
     /// Check if the trajectory contains a loop; if so, redirect to a frontier.
     /// </summary>
     public async Task<SubgoalDirective?> DetectAndBreakLoopAsync()
     {
-        var recentIds = _trajectoryWindow.ToList();
-        if (recentIds.Count < 4) return null;
+        if (_trajectory.Count < 4) return null;
 
-        var cycleNodes = await _memory.DetectCycleInTrajectoryAsync(recentIds);
-        if (cycleNodes.Count == 0) return null;
+        var recentWindow = _trajectory.TakeLast(10).ToList();
+        var cycle = await _memory.DetectCycleInTrajectoryAsync(recentWindow);
 
-        _logger.LogWarning("Loop detected: {Count} nodes", cycleNodes.Count);
+        if (cycle.Count == 0) return null;
 
         var frontiers = await _memory.GetFrontierLandmarksAsync(5);
-        var escape = frontiers.FirstOrDefault(f => !cycleNodes.Contains(f.Id));
-        if (escape is null) return null;
+        if (frontiers.Count == 0) return null;
 
-        var currentId = recentIds[^1];
-        var path = await _memory.ShortestPathAsync(currentId, escape.Id);
+        if (_loopEscape is not null)
+        {
+            return await _loopEscape.SelectEscapeTargetAsync(
+                cycle, frontiers, _memory, _trajectory[^1]);
+        }
 
+        // Default: select the frontier with highest exploration priority
         return new SubgoalDirective
         {
-            TargetLandmarkId = escape.Id,
-            Reason = $"Loop escape: cycle of {cycleNodes.Count} nodes",
-            PlannedPath = path
+            TargetLandmarkId = frontiers[0].Id,
+            Reason = $"Loop escape: cycle of {cycle.Count} nodes detected"
         };
     }
-
-    // ── Exploration: Select Next Subgoal ──
 
     /// <summary>
     /// Select the next subgoal. Priority: (1) escape loops, (2) target frontiers.
     /// </summary>
-    public async Task<SubgoalDirective?> SelectNextSubgoalAsync(string currentLandmarkId)
+    public async Task<SubgoalDirective?> SelectNextSubgoalAsync()
     {
         var loopEscape = await DetectAndBreakLoopAsync();
         if (loopEscape is not null) return loopEscape;
 
-        var frontiers = await _memory.GetFrontierLandmarksAsync(1);
+        var frontiers = await _memory.GetFrontierLandmarksAsync(3);
         if (frontiers.Count == 0) return null;
-
-        var target = frontiers[0];
-        var path = await _memory.ShortestPathAsync(currentLandmarkId, target.Id);
 
         return new SubgoalDirective
         {
-            TargetLandmarkId = target.Id,
-            Reason = $"Frontier (novelty={target.NoveltyScore:F3}, visits={target.VisitCount})",
-            PlannedPath = path
+            TargetLandmarkId = frontiers[0].Id,
+            Reason = "Frontier exploration"
         };
     }
 
-    // ── Experience Replay ──
+    /// <summary>Plan a shortest path between two landmarks.</summary>
+    public Task<IReadOnlyList<string>> PlanPathAsync(string fromId, string toId) =>
+        _memory.ShortestPathAsync(fromId, toId);
 
-    public async Task<IReadOnlyList<StateTransition>> GetReplayBatchAsync(int batchSize = 32)
-        => await _memory.PrioritisedSampleAsync(batchSize, _timestep);
+    /// <summary>Get prioritised replay batch for training.</summary>
+    public Task<IReadOnlyList<StateTransition>> GetReplayBatchAsync(int batchSize = 32) =>
+        _memory.PrioritisedSampleAsync(batchSize, _timestep);
 
-    // ── Diagnostics ──
-
-    public async Task<string> GetMapSummaryAsync()
+    /// <summary>Get a summary of the current map state.</summary>
+    public async Task<MapSnapshot> GetMapSummaryAsync()
     {
-        var (landmarks, transitions) = await _memory.GetGraphStatsAsync();
-        var frontiers = await _memory.GetFrontierLandmarksAsync(3);
+        var (lmCount, trCount) = await _memory.GetGraphStatsAsync();
+        var allLandmarks = await _memory.GetAllLandmarksAsync(hierarchyLevel: 0);
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"=== Topological Map (t={_timestep}) ===");
-        sb.AppendLine($"  Landmarks  : {landmarks}");
-        sb.AppendLine($"  Transitions: {transitions}");
-        sb.AppendLine($"  Trajectory : {_trajectoryWindow.Count}/{TrajectoryWindowSize}");
-        foreach (var f in frontiers)
-            sb.AppendLine($"  Frontier: {f.Id} (novelty={f.NoveltyScore:F3}, visits={f.VisitCount})");
-        return sb.ToString();
+        return new MapSnapshot
+        {
+            LandmarkCount = lmCount,
+            TransitionCount = trCount,
+            ClusterCount = allLandmarks.Select(l => l.ClusterId).Distinct().Count(),
+            MeanNovelty = allLandmarks.Count > 0 ? allLandmarks.Average(l => l.NoveltyScore) : 0,
+            MeanValueEstimate = allLandmarks.Count > 0 ? allLandmarks.Average(l => l.ValueEstimate) : 0,
+            MeanPolicyEntropy = allLandmarks.Count > 0 ? allLandmarks.Average(l => l.PolicyEntropy) : 0,
+        };
     }
 
-    // ── Helpers ──
+    /// <summary>Clear trajectory history (e.g., for new episode).</summary>
+    public void ResetTrajectory() => _trajectory.Clear();
 
-    private static string ComputeStateHash(double[] embedding)
+    /// <summary>Current trajectory length.</summary>
+    public int TrajectoryLength => _trajectory.Count;
+
+    /// <summary>Current timestep.</summary>
+    public long Timestep => _timestep;
+
+    /// <summary>SHA-256 hash of embedding vector, truncated to 16 hex chars.</summary>
+    public static string ComputeStateHash(double[] embedding)
     {
         var bytes = new byte[embedding.Length * sizeof(double)];
         Buffer.BlockCopy(embedding, 0, bytes, 0, bytes.Length);
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash)[..16];
+    }
+
+    /// <summary>Default novelty gate with fixed threshold.</summary>
+    private sealed class DefaultNoveltyGate(double threshold) : INoveltyGate
+    {
+        public bool ShouldCreateLandmark(double distanceToNearest) =>
+            distanceToNearest > threshold;
     }
 }
