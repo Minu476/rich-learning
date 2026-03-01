@@ -1,4 +1,5 @@
 using Xunit;
+using RichLearning.Encoders;
 using RichLearning.Memory;
 using RichLearning.Models;
 
@@ -27,7 +28,7 @@ public class InMemoryGraphMemoryTests
     public async Task NearestNeighbour_EmptyGraph_ReturnsNull()
     {
         var memory = new InMemoryGraphMemory();
-        var encoder = new DefaultStateEncoder(embeddingDimension: 4);
+        var encoder = new DefaultStateEncoder(dimension: 4);
 
         var result = await memory.NearestNeighbourAsync([1.0, 2.0, 3.0, 4.0], encoder);
 
@@ -38,7 +39,7 @@ public class InMemoryGraphMemoryTests
     public async Task NearestNeighbour_SingleLandmark_ReturnsIt()
     {
         var memory = new InMemoryGraphMemory();
-        var encoder = new DefaultStateEncoder(embeddingDimension: 4);
+        var encoder = new DefaultStateEncoder(dimension: 4);
 
         var lm = MakeLandmark("lm1", [1.0, 0.0, 0.0, 0.0]);
         await memory.UpsertLandmarkAsync(lm);
@@ -54,7 +55,7 @@ public class InMemoryGraphMemoryTests
     public async Task NearestNeighbour_MultipleLandmarks_ReturnsClosest()
     {
         var memory = new InMemoryGraphMemory();
-        var encoder = new DefaultStateEncoder(embeddingDimension: 4);
+        var encoder = new DefaultStateEncoder(dimension: 4);
 
         await memory.UpsertLandmarkAsync(MakeLandmark("far", [0.0, 0.0, 0.0, 1.0]));
         await memory.UpsertLandmarkAsync(MakeLandmark("close", [1.0, 0.0, 0.0, 0.0]));

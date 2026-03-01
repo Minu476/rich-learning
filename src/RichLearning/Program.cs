@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
-using RichLearning;
 using RichLearning.Abstractions;
+using RichLearning.Encoders;
 using RichLearning.Memory;
 using RichLearning.Planning;
 using RichLearning.PoC.SplitMnist;
@@ -107,7 +107,7 @@ async Task RunSplitAudio(bool liteDb)
     await using (memory)
     {
         await memory.InitialiseSchemaAsync();
-        var encoder = new DefaultStateEncoder(embeddingDimension: Fsd50kLoader.FeatureDim);
+        var encoder = new DefaultStateEncoder(dimension: Fsd50kLoader.FeatureDim);
 
         string? csvPath = null;
         for (int i = 1; i < args.Length - 1; i++)
@@ -255,7 +255,7 @@ async Task RunDemo(bool liteDb)
     {
         await memory.InitialiseSchemaAsync();
 
-        var encoder = new DefaultStateEncoder(embeddingDimension: 8);
+        var encoder = new DefaultStateEncoder(dimension: 8);
         Cartographer.DefaultNoveltyThreshold = 0.4;
         var cartographer = new Cartographer(memory, encoder);
 

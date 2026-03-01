@@ -9,8 +9,14 @@
     <AssemblyName>RichLearning</AssemblyName>
     <Description>Rich Learning — Continual Reinforcement Learning with Topological Graph Memory in C#</Description>
     <Authors>Nasser Towfigh</Authors>
+    <Copyright>Copyright © 2026 Nasser Towfigh</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Minu476/rich-learning</RepositoryUrl>
+
+    <!-- Version tracking: public repo follows rich-learning-base -->
+    <Version>1.0.0</Version>
+    <BaseCompatibilityVersion>1.0.0</BaseCompatibilityVersion>
+    <VersionSuffix>public</VersionSuffix>
     <NoWarn>CS7022</NoWarn>
   </PropertyGroup>
 

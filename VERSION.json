@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Tracks the version alignment between the public rich-learning repository and the private rich-learning-base library.",
+  "baseVersion": "1.0.0",
+  "publicVersion": "1.0.0",
+  "lastSyncDate": "2026-03-01",
+  "lastSyncCommit": null,
+  "interfaceSubset": {
+    "description": "Public repo exposes a strict subset of rich-learning-base interfaces and type definitions. Implementations are stubs pointing to the base package for full behaviour.",
+    "alignedInterfaces": [
+      "IPassiveManifold<TKey, TValue>",
+      "IActiveManifold<TKey, TValue>",
+      "IConsonanceChecker<TObservation>",
+      "IFrontierScorer",
+      "INoveltyGate",
+      "IPrioritySampler",
+      "ILoopEscapeStrategy",
+      "IFractalActor",
+      "IGraphMemory",
+      "IStateEncoder"
+    ],
+    "alignedModels": [
+      "StateLandmark",
+      "StateTransition",
+      "TrajectoryNode",
+      "FossilizedSkill",
+      "MapSnapshot",
+      "SubgoalDirective",
+      "ClusterStats",
+      "Pattern",
+      "Subgraph"
+    ],
+    "alignedEnums": [
+      "ActorLifecycleState",
+      "DapsaSource",
+      "AgentTier"
+    ],
+    "alignedRecords": [
+      "ConsonanceResult",
+      "ActorCycleResult",
+      "DapsaResult<TAction>",
+      "MetaLevelReport"
+    ],
+    "stubImplementations": [
+      "DapsaEngine<TObservation, TAction>",
+      "Cartographer",
+      "MetaHierarchy",
+      "MetaLevelBuilder",
+      "AgentEfficiencyTracker"
+    ],
+    "fullImplementations": [
+      "InMemoryGraphMemory",
+      "TrajectoryDag",
+      "Fossilizer",
+      "DefaultStateEncoder",
+      "GraphExplorerServer"
+    ],
+    "publicOnly": [
+      "LiteDbGraphMemory",
+      "Neo4jGraphMemory (different impl, same interface)",
+      "SplitMnistDemo",
+      "SplitAudioDemo",
+      "MnistStateEncoder",
+      "Program.cs (demo runner)"
+    ]
+  },
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-03-01",
+      "changes": [
+        "Initial version alignment with rich-learning-base v1.0.0",
+        "IConsonanceChecker aligned to single type-parameter signature",
+        "IGraphMemory aligned with RemoveLandmarkAsync/RemoveTransitionAsync",
+        "Pattern.ClusterKey added to match base",
+        "SubgoalDirective.Reason aligned to nullable string",
+        "DefaultStateEncoder moved to RichLearning.Encoders namespace",
+        "DapsaEngine aligned (FossilLookupRadius, discountFactor, SynthesizeMetaGraphAsync)",
+        "Cartographer aligned (discountFactor parameter)",
+        "MetaHierarchy.ClusterKeyExtractor aligned to check ClusterKey first",
+        "AgentEfficiencyTracker aligned (RewardWindowSize, RankAgents)",
+        "Removed IActionEncoder (not in base)",
+        "Removed DefaultActionEncoder (not in base)"
+      ]
+    }
+  ]
+}

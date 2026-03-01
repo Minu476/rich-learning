@@ -328,6 +328,26 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         return Task.FromResult((landmarks, transitions));
     }
 
+    // ── Pruning / Decay ──
+
+    public Task<bool> RemoveLandmarkAsync(string id)
+    {
+        int deleted = _landmarks.DeleteMany(d => d.LandmarkId == id);
+        if (deleted == 0)
+            return Task.FromResult(false);
+
+        // Remove all transitions involving this landmark
+        _transitions.DeleteMany(d => d.SourceId == id || d.TargetId == id);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> RemoveTransitionAsync(string sourceId, string targetId, int action)
+    {
+        int deleted = _transitions.DeleteMany(d =>
+            d.SourceId == sourceId && d.TargetId == targetId && d.Action == action);
+        return Task.FromResult(deleted > 0);
+    }
+
     // ── Helpers ──
 
     private Dictionary<string, List<string>> BuildAdjacencyList()

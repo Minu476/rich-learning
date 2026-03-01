@@ -393,97 +393,40 @@ public sealed class Neo4jGraphMemory : IGraphMemory
         });
     }
 
-    // ── Extended Operations (not in IGraphMemory) ──
+    // ── Pruning / Decay ──
 
-    /// <summary>Get stale landmarks not visited since the threshold.</summary>
-    public async Task<IReadOnlyList<StateLandmark>> GetStaleLandmarksAsync(long staleThreshold, int topK = 10)
+    public async Task<bool> RemoveLandmarkAsync(string id)
     {
         await using var session = GetSession();
-        return await session.ExecuteReadAsync(async tx =>
+        return await session.ExecuteWriteAsync(async tx =>
         {
             var cursor = await tx.RunAsync(
                 """
-                MATCH (l:Landmark)
-                WHERE l.lastVisited < $threshold
-                ORDER BY l.lastVisited ASC
-                LIMIT $topK
-                RETURN l
+                MATCH (l:Landmark {id: $id})
+                OPTIONAL MATCH (l)-[r:TRANSITION]-()
+                DELETE r, l
+                RETURN count(l) AS deleted
                 """,
-                new { threshold = staleThreshold, topK });
-
-            var list = new List<StateLandmark>();
-            while (await cursor.FetchAsync())
-            {
-                var node = cursor.Current["l"].As<INode>();
-                list.Add(MapNodeToLandmark(node));
-            }
-            return (IReadOnlyList<StateLandmark>)list;
+                new { id });
+            await cursor.FetchAsync();
+            return cursor.Current["deleted"].As<int>() > 0;
         });
     }
 
-    /// <summary>Get bottleneck landmarks (high in×out degree).</summary>
-    public async Task<IReadOnlyList<StateLandmark>> GetBottleneckLandmarksAsync(int topK = 5)
+    public async Task<bool> RemoveTransitionAsync(string sourceId, string targetId, int action)
     {
         await using var session = GetSession();
-        return await session.ExecuteReadAsync(async tx =>
+        return await session.ExecuteWriteAsync(async tx =>
         {
             var cursor = await tx.RunAsync(
                 """
-                MATCH (l:Landmark)
-                OPTIONAL MATCH (l)-[out:TRANSITION]->()
-                WITH l, count(out) AS outDeg
-                OPTIONAL MATCH ()-[inc:TRANSITION]->(l)
-                WITH l, outDeg, count(inc) AS inDeg
-                WITH l, (outDeg * inDeg) AS bridgeScore
-                WHERE outDeg > 0 AND inDeg > 0
-                ORDER BY bridgeScore DESC
-                LIMIT $topK
-                RETURN l
+                MATCH (s:Landmark {id: $sourceId})-[r:TRANSITION {action: $action}]->(t:Landmark {id: $targetId})
+                DELETE r
+                RETURN count(r) AS deleted
                 """,
-                new { topK });
-
-            var list = new List<StateLandmark>();
-            while (await cursor.FetchAsync())
-            {
-                var node = cursor.Current["l"].As<INode>();
-                list.Add(MapNodeToLandmark(node));
-            }
-            return (IReadOnlyList<StateLandmark>)list;
-        });
-    }
-
-    /// <summary>Get per-cluster statistics.</summary>
-    public async Task<IReadOnlyDictionary<int, ClusterStats>> GetClusterStatsAsync()
-    {
-        await using var session = GetSession();
-        return await session.ExecuteReadAsync(async tx =>
-        {
-            var cursor = await tx.RunAsync(
-                """
-                MATCH (l:Landmark)
-                WITH l.clusterId AS cid,
-                     count(l) AS cnt,
-                     avg(l.visitCount) AS avgVisits,
-                     avg(l.noveltyScore) AS avgNovelty,
-                     avg(l.valueEstimate) AS avgValue
-                RETURN cid, cnt, avgVisits, avgNovelty, avgValue
-                ORDER BY avgVisits ASC
-                """);
-
-            var dict = new Dictionary<int, ClusterStats>();
-            while (await cursor.FetchAsync())
-            {
-                var r = cursor.Current;
-                var cid = r["cid"].As<int>();
-                dict[cid] = new ClusterStats
-                {
-                    ClusterId = cid,
-                    LandmarkCount = r["cnt"].As<int>(),
-                    MeanValue = r["avgValue"].As<double>(),
-                    MeanNovelty = r["avgNovelty"].As<double>()
-                };
-            }
-            return (IReadOnlyDictionary<int, ClusterStats>)dict;
+                new { sourceId, targetId, action });
+            await cursor.FetchAsync();
+            return cursor.Current["deleted"].As<int>() > 0;
         });
     }
 

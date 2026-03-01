@@ -82,4 +82,12 @@ public interface IGraphMemory : IAsyncDisposable
 
     /// <summary>Get basic graph statistics: (landmarkCount, transitionCount).</summary>
     Task<(int Landmarks, int Transitions)> GetGraphStatsAsync();
+
+    // ── Pruning / Decay Operations ──
+
+    /// <summary>Remove a landmark and all its outgoing/incoming transitions. Returns true if found.</summary>
+    Task<bool> RemoveLandmarkAsync(string id);
+
+    /// <summary>Remove a specific transition edge. Returns true if found.</summary>
+    Task<bool> RemoveTransitionAsync(string sourceId, string targetId, int action);
 }

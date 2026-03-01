@@ -28,6 +28,14 @@ public sealed class Pattern
     public bool IsFossilized { get; private set; }
     public float TeachingWeight { get; set; } = 1.0f;
 
+    /// <summary>
+    /// Semantic cluster key for meta-hierarchy grouping.
+    /// Set by DapsaEngine after looking up the observed state's landmark ClusterId.
+    /// Enables meaningful subgraph formation rather than random SHA-256 prefix bucketing.
+    /// Empty string falls back to the StateSignature prefix (cold-start only).
+    /// </summary>
+    public string ClusterKey { get; set; } = string.Empty;
+
     /// <summary>Minimum successes before a pattern can fossilize.</summary>
     public int FossilThreshold { get; init; } = 50;
 

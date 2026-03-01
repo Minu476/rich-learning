@@ -22,6 +22,9 @@ Thumbs.db
 mnist_data/
 fsd50k_data/
 
+# Private/experimental projects (not part of public repo)
+src/Chimera.Face/
+
 # Secrets
 *.env
 appsettings.Development.json

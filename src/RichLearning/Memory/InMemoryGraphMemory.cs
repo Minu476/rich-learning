@@ -248,5 +248,49 @@ public sealed class InMemoryGraphMemory : IGraphMemory
         return Task.FromResult((_landmarks.Count, _edges.Count));
     }
 
+    // ── Pruning / Decay ──
+
+    public Task<bool> RemoveLandmarkAsync(string id)
+    {
+        if (!_landmarks.Remove(id))
+            return Task.FromResult(false);
+
+        // Remove all outgoing transitions
+        if (_outgoing.Remove(id, out var outList))
+        {
+            foreach (var t in outList)
+                _edges.Remove($"{t.SourceId}→{t.TargetId}→{t.Action}");
+        }
+
+        // Remove all incoming transitions (edges targeting this landmark)
+        var incomingKeys = _edges
+            .Where(kv => kv.Value.TargetId == id)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var key in incomingKeys)
+        {
+            var trans = _edges[key];
+            _edges.Remove(key);
+
+            if (_outgoing.TryGetValue(trans.SourceId, out var srcList))
+                srcList.RemoveAll(t => t.TargetId == id);
+        }
+
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> RemoveTransitionAsync(string sourceId, string targetId, int action)
+    {
+        var edgeKey = $"{sourceId}→{targetId}→{action}";
+        if (!_edges.Remove(edgeKey))
+            return Task.FromResult(false);
+
+        if (_outgoing.TryGetValue(sourceId, out var list))
+            list.RemoveAll(t => t.TargetId == targetId && t.Action == action);
+
+        return Task.FromResult(true);
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

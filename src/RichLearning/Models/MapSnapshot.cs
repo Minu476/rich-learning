@@ -13,10 +13,7 @@ public sealed record SubgoalDirective
     public double Distance { get; init; }
 
     /// <summary>Reason for selecting this subgoal (for explainability).</summary>
-    public string Reason { get; init; } = string.Empty;
-
-    /// <summary>Planned path of landmark IDs from current position to target.</summary>
-    public IReadOnlyList<string> PlannedPath { get; init; } = [];
+    public string? Reason { get; init; }
 }
 
 /// <summary>

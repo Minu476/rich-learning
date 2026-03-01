@@ -90,19 +90,25 @@ public interface IActiveManifold<TKey, TValue> where TKey : notnull
 ///   - Robotics: |predicted_position − actual_position| > threshold_meters
 ///   - LLM: cosine_distance(predicted_answer, actual_answer) > threshold
 ///   - Trading: |predicted_regime − actual_regime| > threshold
-public interface IConsonanceChecker<TObservation, TAction>
+/// </summary>
+public interface IConsonanceChecker<TObservation>
 {
     /// <summary>
     /// Evaluate whether the current observation is surprising enough
     /// to warrant activating the expensive Active Manifold (System 2).
     /// </summary>
     /// <param name="observation">The new observation from the environment.</param>
-    /// <param name="predictedAction">The action predicted by the Passive Manifold (fossil).</param>
+    /// <param name="predictedAction">
+    /// The action the Passive Manifold predicted for this situation.
+    /// When provided, the checker can compute error as |predicted − actual|
+    /// rather than relying solely on internal confidence tracking.
+    /// This is the correct Patent 3 formulation: Consonance Error = |predicted − actual|.
+    /// </param>
     /// <returns>
     /// A ConsonanceResult containing the error magnitude and the
     /// decision (passive/active mode).
     /// </returns>
-    ConsonanceResult Check(TObservation observation, TAction predictedAction);
+    ConsonanceResult Check(TObservation observation, string? predictedAction = null);
 }
 
 /// <summary>
