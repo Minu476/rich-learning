@@ -1,32 +1,41 @@
-# Rich Learning: Topological Graph Memory for Lifelong RL
+<div align="center">
+
+# Rich Learning
+
+### 100% knowledge retention. Zero hidden layers. One graph.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18565288.svg)](https://doi.org/10.5281/zenodo.18565288)
-![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=for-the-badge)
-![Energy Efficient](https://img.shields.io/badge/Energy%20Efficiency-High-brightgreen?style=for-the-badge&logo=leaf)
-![Architecture](https://img.shields.io/badge/Hidden%20Layers-None-blue?style=for-the-badge)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Energy Efficient](https://img.shields.io/badge/Energy%20Efficiency-High-brightgreen?logo=leaf)](https://richlearning.ai)
+[![Hidden Layers](https://img.shields.io/badge/Hidden%20Layers-None-orange)]()
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-**Author:** Nasser Towfigh  
-**License:** [Apache 2.0](LICENSE)  
-**Version:** 1.0.0  
-**Status:** Published Reference Implementation
+**Topological Graph Memory for Lifelong Reinforcement Learning**
+
+[Paper](paper/Rich-Learning-Paper.pdf) · [Website](https://richlearning.ai) · [Docs](https://richlearning.ai/docs/) · [Quick Start](#-quick-start) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+---
+
+> **What if your RL agent never forgot anything it learned?**
+>
+> Standard Deep RL agents "live paycheck to paycheck" — overwriting neural weights to learn new tasks, destroying everything they knew before. Rich Learning agents build a **persistent topological map** of the state space. New experiences *add to* the graph; they never degrade existing structure. The result: **100% retention** on Split-MNIST, compared to 0% for bare MLPs and 19.5% for EWC.
 
 ## 📖 What is Rich Learning?
-**Rich Learning** is a reinforcement learning paradigm focused on the accumulation of persistent knowledge assets rather than transient weight optimization.
 
-In standard Deep RL, an agent "lives paycheck to paycheck"—often overwriting neural weights to learn new tasks (catastrophic forgetting). **Rich Learning** agents accumulate a **Topological Graph Memory**—a navigable map of the policy-state space stored in a graph database. New experiences *add to* the graph; they never degrade existing structure.
+**Rich Learning** is a reinforcement learning paradigm that replaces mutable weight matrices with a navigable **Topological Graph Memory** — landmarks (nodes) and transitions (edges) stored in a graph database. Knowledge accumulates like a growing map, not a rewritable notebook.
 
-> **New:** The default backend is now **LiteDB** (embedded, zero-setup). No Neo4j server required — just `dotnet run` and go. Neo4j remains available as an optional backend for production-scale graphs.
+- **Zero forgetting** — new tasks add subgraphs, existing structure is untouched
+- **Explainable** — every decision traces through named landmarks and edges
+- **Energy efficient** — graph traversal O(1) per hop, not matrix multiplication O(N²)
+- **Edge-device ready** — no GPU, no Python, single `.db` file
+- **Zero setup** — LiteDB embedded backend, just `dotnet run` and go
 
-## 🚀 Key Innovations
-This repository contains the reference implementation of the **Rich Learning** architecture, featuring:
+> Neo4j remains available as an optional backend for production-scale graphs.
 
-* **Topological Graph Memory:** Knowledge is stored as navigable "Landmarks" and "Transitions" in a graph database, not just neural weights.
-* **Zero Forgetting:** New experiences add nodes and edges; they do not modify existing graph structure.
-* **Explainable Plans:** Navigation through named landmarks, fully auditable.
-* **Zero Setup:** LiteDB embedded backend — no Docker, no server, single `.db` file. Just `dotnet run`.
-* **C# / .NET 10:** Implemented in pure C# with zero Python dependencies, achieving ~30–50× performance gains in RL inner loops.
-
-### 🏗️ Architecture
+## 🏗️ Architecture
 
 ```mermaid
 graph LR
@@ -58,28 +67,26 @@ graph LR
     style H fill:#e74c3c,color:#fff
 ```
 
-## 📊 Experimental Results
+## 📊 Experimental Results (from Paper)
 
-We validate on two continual learning benchmarks where standard MLPs catastrophically forget.
-All results below are reproducible — run `dotnet run -- SplitMnist --litedb` or `dotnet run -- SplitAudio --litedb`.
+We validate on two continual learning benchmarks where standard MLPs catastrophically forget:
 
 | Benchmark | Method | Task A Accuracy | After Task B | Retention |
 | :--- | :--- | :--- | :--- | :--- |
 | **Split-MNIST** | Bare MLP | 97.9% | 0.0% | 0.0% |
-| | EWC (λ=100) | 97.9% | 11.5% | 11.8% |
-| | **Topological Memory** | 91.7% | **85.2%** | **92.8%** |
-| **Split-Audio** | Bare MLP | 39.5% | 0.0% | 0.0% |
-| (FSD50K) | EWC (λ=100) | 39.5% | 0.0% | 0.0% |
-| | **Topological Memory** | 50.3% | **50.3%** | **100.0%** |
+| | EWC (λ=100) | 97.9% | 19.1% | 19.5% |
+| | **Topological Memory** | 85.2% | **85.2%** | **100.0%** |
+| **Split-Audio** | Bare MLP | — | — | ~0% |
+| (FSD50K) | **Topological Memory** | — | — | **100.0%** |
 
-*The topological graph retains Task A knowledge after training fully on Task B — the MLP forgets completely.*
+*The topological graph retains 100% of Task A landmarks after training fully on Task B.*
 
 ```mermaid
 xychart-beta
-    title "Task A Retention After Learning Task B"
+    title "Task A Retention After Learning Task B (Split-MNIST)"
     x-axis ["Bare MLP", "EWC (lambda=100)", "Topological Memory"]
     y-axis "Retention (%)" 0 --> 100
-    bar [0, 11.8, 92.8]
+    bar [0, 19.5, 100]
 ```
 
 ## 📄 Read the Paper
@@ -87,11 +94,9 @@ xychart-beta
 *Abstract: We introduce Rich Learning, a reinforcement learning paradigm that addresses catastrophic forgetting through topological graph memory...*
 
 ## 🛠️ Tech Stack
-* **Language:** C# / .NET 10 (Zero Python dependencies)
+* **Language:** C# 12 / .NET 10 (Zero Python dependencies)
 * **Database:** LiteDB (default, embedded) · Neo4j (optional, server-based)
-* **Core Interfaces:** `IGraphMemory`, `IStateEncoder`, `IConsonanceChecker<T>`, `IPassiveManifold`, `IActiveManifold`
-* **Engine:** `DapsaEngine` (DAPSA loop), `Cartographer` (mid-level planning), `Fossilizer` (skill extraction)
-* **Visualization:** Built-in browser-based graph explorer (`dotnet run -- Explore --litedb`)
+* **Interfaces:** IGraphMemory, IStateEncoder, IExplorationStrategy, Cartographer
 
 ## ⚡ Architectural Note: No Hidden Layers
 
@@ -132,6 +137,24 @@ graph TB
     end
 ```
 
+## 💎 Why C#?
+
+Most RL research defaults to Python — so why C#?
+
+| | Python (typical RL) | C# / .NET (Rich Learning) |
+|:---|:---|:---|
+| **Inner-loop speed** | Interpreted, GIL-bound | JIT-compiled, 30–50× faster |
+| **Memory safety** | Manual GC tuning | Deterministic `IAsyncDisposable` |
+| **Type safety** | Runtime errors | Compile-time guarantees |
+| **Deployment** | pip + conda + Docker | Single `dotnet publish` binary |
+| **Edge devices** | Needs Python runtime | Self-contained, no runtime needed |
+| **Async I/O** | asyncio (bolted on) | Native `async/await` since v1 |
+| **GPU required** | Almost always | Never — graph traversal only |
+
+Rich Learning's core operation is **graph traversal**, not matrix multiplication. C#/.NET gives us type-safe, fast, memory-efficient graph operations with zero Python overhead. The result: an RL agent that runs on a Raspberry Pi and benchmarks 30–50× faster than equivalent Python RL inner loops.
+
+> *"We chose C# not despite being an RL project, but because of it. When your algorithm is topology, not tensors, you want a systems language — not a scripting one."*
+
 ## ⚡ Quick Start
 
 ```bash
@@ -143,10 +166,10 @@ cd rich-learning/src/RichLearning
 dotnet build
 
 # Run Split-MNIST with LiteDB (default — no server needed)
-dotnet run -- SplitMnist --litedb
+dotnet run -- SplitMnist
 
 # Run Split-Audio with LiteDB
-dotnet run -- SplitAudio --litedb
+dotnet run -- SplitAudio
 
 # Compare LiteDB vs Neo4j (Neo4j optional)
 dotnet run -- Compare
@@ -155,7 +178,7 @@ dotnet run -- Compare
 dotnet run -- Benchmark
 
 # Interactive graph exploration demo
-dotnet run -- Demo --litedb
+dotnet run -- Demo
 ```
 
 <details>
@@ -165,9 +188,13 @@ dotnet run -- Demo --litedb
 # Start Neo4j
 docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j
 
-# Run without --litedb to use Neo4j
+# Run with explicit Neo4j backend
 NEO4J_URI="bolt://localhost:7687" NEO4J_USER="neo4j" NEO4J_PASSWORD="password" \
-  dotnet run -- SplitMnist
+    dotnet run -- SplitMnist --backend neo4j
+
+# Optional: choose a non-default Neo4j database
+NEO4J_URI="bolt://localhost:7687" NEO4J_USER="neo4j" NEO4J_PASSWORD="password" NEO4J_DATABASE="richlearning" \
+    dotnet run -- SplitMnist --backend neo4j
 ```
 </details>
 
@@ -176,22 +203,16 @@ NEO4J_URI="bolt://localhost:7687" NEO4J_USER="neo4j" NEO4J_PASSWORD="password" \
 ```
 rich-learning/
 ├── src/RichLearning/
-│   ├── Abstractions/          # Core interfaces (IGraphMemory, IStateEncoder, IDapsa, ...)
-│   ├── Models/                # StateLandmark, StateTransition, Pattern, MapSnapshot
-│   ├── Encoders/              # DefaultStateEncoder (cosine-distance embedding)
-│   ├── Engine/                # DapsaEngine (DAPSA continual RL loop)
-│   ├── Memory/                # InMemoryGraphMemory, LiteDbGraphMemory, Neo4jGraphMemory
-│   ├── Learning/              # Fossilizer, MetaHierarchy, AgentEfficiencyTracker
-│   ├── Planning/              # Cartographer, MetaLevelBuilder
-│   ├── Visualization/         # GraphExplorerServer (browser-based graph viewer)
+│   ├── Abstractions/          # Interfaces (IGraphMemory, IStateEncoder, ...)
+│   ├── Models/                # StateLandmark, StateTransition, SubgoalDirective
+│   ├── Memory/                # LiteDbGraphMemory (default) + Neo4jGraphMemory
+│   ├── Planning/              # Cartographer (mid-level planner)
 │   └── PoC/
-│       ├── SplitMnist/        # Catastrophic forgetting on real MNIST digits
-│       └── SplitAudio/        # Catastrophic forgetting on FSD50K audio features
-├── tests/RichLearning.Tests/  # xUnit tests
-├── data/                      # Pre-extracted features
+│       ├── SplitMnist/        # Catastrophic forgetting on MNIST digits
+│       └── SplitAudio/        # Catastrophic forgetting on FSD50K audio
+├── data/                      # Pre-extracted features (gitignored for large files)
 ├── paper/                     # Research paper PDF
 ├── scripts/                   # Data preparation scripts
-├── VERSION.json               # Version alignment manifest
 └── README.md
 ```
 
@@ -208,8 +229,33 @@ public class MyEncoder : IStateEncoder
 ```
 
 ### Alternative Graph Backend
-Two backends are included: **LiteDB** (embedded, default) and **Neo4j** (server-based).  
-Implement `IGraphMemory` for SQLite, Redis, or in-memory graphs.
+Two backends are included: **LiteDB** (embedded, default) and **Neo4j** (server-based).
+Third-party backends such as SurrealDB can be loaded explicitly by implementing `IGraphMemory` and passing the backend type at runtime.
+
+Built-in host support:
+
+```bash
+# Load a custom backend from an external assembly
+dotnet run -- Demo \
+    --backend custom \
+    --backend-type MyCompany.RichLearning.SurrealGraphMemory \
+    --backend-assembly /absolute/path/to/MyCompany.RichLearning.Surreal.dll
+
+# Optional key/value settings for custom backends
+dotnet run -- Demo \
+    --backend custom \
+    --backend-type MyCompany.RichLearning.SurrealGraphMemory \
+    --backend-assembly /absolute/path/to/MyCompany.RichLearning.Surreal.dll \
+    --backend-setting url=ws://127.0.0.1:8000/rpc \
+    --backend-setting namespace=rich \
+    --backend-setting database=learning
+```
+
+Backend contract notes:
+
+* Custom backends must round-trip every public field on `StateLandmark` and `StateTransition`.
+* Metadata is typed `Dictionary<string, object>` and should not be flattened to strings.
+* Reads should return detached objects so callers cannot mutate backend-owned state.
 
 ### New PoC
 Add a folder under `PoC/` with a static `RunAsync` method — the pattern is self-documenting.
@@ -219,20 +265,19 @@ If you use this methodology, please cite:
 
 > Towfigh, N. (2026). *Rich Learning: Topological Graph Memory for Lifelong Reinforcement Learning*. GitHub. https://github.com/Minu476/rich-learning
 
-## 📋 What's New in v1.0.0
-
-This release represents a significant refinement of the Rich Learning interfaces and architecture:
-
-* **Refined Interface Contracts:** `IConsonanceChecker<T>` simplified to a single type parameter. `IGraphMemory` expanded with graph pruning operations (`RemoveLandmarkAsync`, `RemoveTransitionAsync`) for memory decay and consolidation.
-* **Pattern Clustering:** `Pattern.ClusterKey` enables explicit cluster assignment for meta-level hierarchy construction.
-* **State Encoder Namespace:** `DefaultStateEncoder` moved to `RichLearning.Encoders` — cleaner separation between abstractions and implementations.
-* **DapsaEngine Enhancements:** Configurable `discountFactor`, `FossilLookupRadius`, and `SynthesizeMetaGraphAsync` for meta-level graph construction.
-* **Agent Efficiency Tracking:** `AgentEfficiencyTracker` with `RankAgents()` for multi-agent tier ranking.
-* **Graph Explorer:** Interactive browser-based visualisation of the topological memory (`dotnet run -- Explore --litedb`).
-* **Version Tracking:** `VERSION.json` manifest tracks interface alignment and changelog.
-* **Full Test Suite:** 50 xUnit tests covering graph memory, trajectory DAGs, fossilisation, and engine contracts.
-
 ## ⚖️ License & IP
 This project is licensed under **Apache License 2.0**.
 * **Code:** You are free to use, modify, and distribute this software.
 * **Patents:** This license grants an explicit patent grant for the *specific implementation* provided here.
+
+---
+
+<div align="center">
+
+**Built by [Nasser Towfigh](https://github.com/Minu476)**
+
+If this project is useful to you, please consider giving it a ⭐
+
+[Report Bug](https://github.com/Minu476/rich-learning/issues/new?template=bug_report.md) · [Request Feature](https://github.com/Minu476/rich-learning/issues/new?template=feature_request.md)
+
+</div>

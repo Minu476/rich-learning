@@ -17,21 +17,23 @@ public sealed class Neo4jGraphMemory : IGraphMemory
 {
     private readonly IDriver _driver;
     private readonly ILogger<Neo4jGraphMemory> _logger;
-    private readonly string _database;
+    private readonly string? _database;
 
     public Neo4jGraphMemory(
         string uri,
         string user,
         string password,
         ILogger<Neo4jGraphMemory> logger,
-        string database = "neo4j")
+        string? database = null)
     {
         _driver = GraphDatabase.Driver(uri, AuthTokens.Basic(user, password));
         _logger = logger;
-        _database = database;
+        _database = string.IsNullOrWhiteSpace(database) ? null : database;
     }
 
-    private IAsyncSession GetSession() => _driver.AsyncSession(o => o.WithDatabase(_database));
+    private IAsyncSession GetSession() => string.IsNullOrWhiteSpace(_database)
+        ? _driver.AsyncSession()
+        : _driver.AsyncSession(o => o.WithDatabase(_database));
 
     // ── Schema ──
 
@@ -53,8 +55,9 @@ public sealed class Neo4jGraphMemory : IGraphMemory
     public async Task UpsertLandmarkAsync(StateLandmark landmark)
     {
         await using var session = GetSession();
-        var actionCountsJson = System.Text.Json.JsonSerializer.Serialize(landmark.ActionCounts);
-        var metadataJson = System.Text.Json.JsonSerializer.Serialize(landmark.Metadata);
+        var actionCountsJson = GraphMemorySerialization.SerializeActionCounts(landmark.ActionCounts);
+        var metadataJson = GraphMemorySerialization.SerializeMetadata(landmark.Metadata);
+        var episodicTracesJson = GraphMemorySerialization.SerializeEpisodicTraces(landmark.EpisodicTraces);
 
         await session.ExecuteWriteAsync(async tx =>
         {
@@ -72,7 +75,8 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     l.actionCountsJson  = $actionCountsJson,
                     l.lastVisited       = $lastVisited,
                     l.createdTimestep   = $createdTimestep,
-                    l.metadataJson      = $metadataJson
+                    l.metadataJson      = $metadataJson,
+                    l.episodicTracesJson = $episodicTracesJson
                 """,
                 new
                 {
@@ -88,7 +92,8 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     actionCountsJson,
                     lastVisited = landmark.LastVisitedTimestep,
                     createdTimestep = landmark.CreatedTimestep,
-                    metadataJson
+                    metadataJson,
+                    episodicTracesJson
                 });
         });
     }
@@ -165,11 +170,16 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                 MATCH (tgt:Landmark {id: $tgtId})
                 MERGE (src)-[t:TRANSITION {action: $action}]->(tgt)
                 SET t.reward           = $reward,
+                    t.rewardVariance   = $rewardVariance,
                     t.transitionCount  = $transitionCount,
                     t.successRate      = $successRate,
-                    t.temporalDistance  = $temporalDistance,
+                    t.confidence       = $confidence,
+                    t.temporalDistance = $temporalDistance,
                     t.tdError          = $tdError,
-                    t.lastTrained      = $lastTrained
+                    t.lastTrained      = $lastTrained,
+                    t.actionCountsJson = $actionCountsJson,
+                    t.isMacroEdge      = $isMacroEdge,
+                    t.macroPathJson    = $macroPathJson
                 """,
                 new
                 {
@@ -177,11 +187,16 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     tgtId = transition.TargetId,
                     action = transition.Action,
                     reward = transition.Reward,
+                    rewardVariance = transition.RewardVariance,
                     transitionCount = transition.TransitionCount,
                     successRate = transition.SuccessRate,
+                    confidence = transition.Confidence,
                     temporalDistance = transition.TemporalDistance,
                     tdError = transition.TdError,
-                    lastTrained = transition.LastTrainedTimestep
+                    lastTrained = transition.LastTrainedTimestep,
+                    actionCountsJson = GraphMemorySerialization.SerializeActionCounts(transition.ActionCounts),
+                    isMacroEdge = transition.IsMacroEdge,
+                    macroPathJson = GraphMemorySerialization.SerializeMacroPath(transition.MacroPath)
                 });
         });
     }
@@ -195,8 +210,13 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                 """
                 MATCH (src:Landmark {id: $id})-[t:TRANSITION]->(tgt:Landmark)
                 RETURN t.action AS action, t.reward AS reward, t.transitionCount AS cnt,
+                      coalesce(t.rewardVariance, 0.0) AS rv,
                        t.successRate AS sr, t.temporalDistance AS td, t.tdError AS tde,
-                       t.lastTrained AS lt, tgt.id AS tgtId
+                      coalesce(t.confidence, 0.5) AS conf,
+                      t.lastTrained AS lt, tgt.id AS tgtId,
+                      coalesce(t.actionCountsJson, '') AS actionCountsJson,
+                      coalesce(t.isMacroEdge, false) AS isMacroEdge,
+                      coalesce(t.macroPathJson, '') AS macroPathJson
                 """,
                 new { id = landmarkId });
 
@@ -210,11 +230,16 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     TargetId = r["tgtId"].As<string>(),
                     Action = r["action"].As<int>(),
                     Reward = r["reward"].As<double>(),
+                    RewardVariance = r["rv"].As<double>(),
                     TransitionCount = r["cnt"].As<int>(),
                     SuccessRate = r["sr"].As<double>(),
+                    Confidence = r["conf"].As<double>(),
                     TemporalDistance = r["td"].As<int>(),
                     TdError = r["tde"].As<double>(),
-                    LastTrainedTimestep = r["lt"].As<long>()
+                    LastTrainedTimestep = r["lt"].As<long>(),
+                    ActionCounts = GraphMemorySerialization.DeserializeActionCounts(r["actionCountsJson"].As<string>()),
+                    IsMacroEdge = r["isMacroEdge"].As<bool>(),
+                    MacroPath = GraphMemorySerialization.DeserializeMacroPath(r["macroPathJson"].As<string>())
                 });
             }
             return (IReadOnlyList<StateTransition>)list;
@@ -326,8 +351,13 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                 LIMIT $batchSize
                 RETURN src.id AS srcId, tgt.id AS tgtId, t.action AS action,
                        t.reward AS reward, t.transitionCount AS cnt,
+                      coalesce(t.rewardVariance, 0.0) AS rv,
                        t.successRate AS sr, t.temporalDistance AS td,
-                       t.tdError AS tde, t.lastTrained AS lt
+                      t.tdError AS tde, t.lastTrained AS lt,
+                      coalesce(t.confidence, 0.5) AS conf,
+                      coalesce(t.actionCountsJson, '') AS actionCountsJson,
+                      coalesce(t.isMacroEdge, false) AS isMacroEdge,
+                      coalesce(t.macroPathJson, '') AS macroPathJson
                 """,
                 new { batchSize, currentTs = currentTimestep });
 
@@ -341,11 +371,16 @@ public sealed class Neo4jGraphMemory : IGraphMemory
                     TargetId = r["tgtId"].As<string>(),
                     Action = r["action"].As<int>(),
                     Reward = r["reward"].As<double>(),
+                    RewardVariance = r["rv"].As<double>(),
                     TransitionCount = r["cnt"].As<int>(),
                     SuccessRate = r["sr"].As<double>(),
+                    Confidence = r["conf"].As<double>(),
                     TemporalDistance = r["td"].As<int>(),
                     TdError = r["tde"].As<double>(),
-                    LastTrainedTimestep = r["lt"].As<long>()
+                    LastTrainedTimestep = r["lt"].As<long>(),
+                    ActionCounts = GraphMemorySerialization.DeserializeActionCounts(r["actionCountsJson"].As<string>()),
+                    IsMacroEdge = r["isMacroEdge"].As<bool>(),
+                    MacroPath = GraphMemorySerialization.DeserializeMacroPath(r["macroPathJson"].As<string>())
                 });
             }
             return (IReadOnlyList<StateTransition>)list;
@@ -434,32 +469,20 @@ public sealed class Neo4jGraphMemory : IGraphMemory
 
     private static StateLandmark MapNodeToLandmark(INode node)
     {
-        var actionCounts = new Dictionary<int, int>();
-        if (node.Properties.ContainsKey("actionCountsJson"))
-        {
-            var json = node["actionCountsJson"].As<string>();
-            if (!string.IsNullOrEmpty(json))
-            {
-                actionCounts = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, int>>(json)
-                    ?? new Dictionary<int, int>();
-            }
-        }
+        var actionCounts = node.Properties.ContainsKey("actionCountsJson")
+            ? GraphMemorySerialization.DeserializeActionCounts(node["actionCountsJson"].As<string>())
+            : new Dictionary<int, int>();
 
         var childIds = node.Properties.ContainsKey("childNodeIds")
             ? node["childNodeIds"].As<List<string>>()
             : new List<string>();
 
-        var metadata = new Dictionary<string, object>();
-        if (node.Properties.ContainsKey("metadataJson"))
-        {
-            var json = node["metadataJson"].As<string>();
-            if (!string.IsNullOrEmpty(json))
-            {
-                var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                if (parsed != null)
-                    metadata = parsed.ToDictionary(k => k.Key, v => (object)v.Value);
-            }
-        }
+        var metadata = node.Properties.ContainsKey("metadataJson")
+            ? GraphMemorySerialization.DeserializeMetadata(node["metadataJson"].As<string>())
+            : new Dictionary<string, object>();
+        var episodicTraces = node.Properties.ContainsKey("episodicTracesJson")
+            ? GraphMemorySerialization.DeserializeEpisodicTraces(node["episodicTracesJson"].As<string>())
+            : new List<EpisodicTrace>();
 
         return new StateLandmark
         {
@@ -477,6 +500,7 @@ public sealed class Neo4jGraphMemory : IGraphMemory
             LastVisitedTimestep = node["lastVisited"].As<long>(),
             CreatedTimestep = node["createdTimestep"].As<long>(),
             ActionCounts = actionCounts,
+            EpisodicTraces = episodicTraces,
             Metadata = metadata
         };
     }

@@ -23,6 +23,7 @@ public sealed class InMemoryGraphMemory : IGraphMemory
     private readonly Dictionary<string, StateLandmark> _landmarks = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<StateTransition>> _outgoing = new(StringComparer.Ordinal);
     private readonly Dictionary<string, StateTransition> _edges = new(StringComparer.Ordinal);
+    private readonly ReaderWriterLockSlim _lock = new();
 
     public Task InitialiseSchemaAsync() => Task.CompletedTask;
 
@@ -30,79 +31,127 @@ public sealed class InMemoryGraphMemory : IGraphMemory
 
     public Task UpsertLandmarkAsync(StateLandmark landmark)
     {
-        _landmarks[landmark.Id] = landmark;
+        _lock.EnterWriteLock();
+        try
+        {
+            _landmarks[landmark.Id] = GraphMemorySerialization.CloneLandmark(landmark);
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
         return Task.CompletedTask;
     }
 
     public Task<StateLandmark?> GetLandmarkAsync(string id)
     {
-        _landmarks.TryGetValue(id, out var lm);
-        return Task.FromResult(lm);
+        _lock.EnterReadLock();
+        try
+        {
+            _landmarks.TryGetValue(id, out var lm);
+            return Task.FromResult(lm is null ? null : GraphMemorySerialization.CloneLandmark(lm));
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     public Task<IReadOnlyList<StateLandmark>> GetAllLandmarksAsync(int? hierarchyLevel = null)
     {
-        IReadOnlyList<StateLandmark> result = hierarchyLevel.HasValue
-            ? _landmarks.Values.Where(l => l.HierarchyLevel == hierarchyLevel.Value).ToList()
-            : _landmarks.Values.ToList();
-        return Task.FromResult(result);
+        _lock.EnterReadLock();
+        try
+        {
+            IReadOnlyList<StateLandmark> result = hierarchyLevel.HasValue
+                ? _landmarks.Values.Where(l => l.HierarchyLevel == hierarchyLevel.Value).Select(GraphMemorySerialization.CloneLandmark).ToList()
+                : _landmarks.Values.Select(GraphMemorySerialization.CloneLandmark).ToList();
+            return Task.FromResult(result);
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     public Task<(StateLandmark Landmark, double Distance)?> NearestNeighbourAsync(
         double[] embedding, IStateEncoder encoder)
     {
-        if (_landmarks.Count == 0)
-            return Task.FromResult<(StateLandmark, double)?>(null);
-
-        StateLandmark? best = null;
-        double bestDist = double.MaxValue;
-
-        foreach (var lm in _landmarks.Values)
+        _lock.EnterReadLock();
+        try
         {
-            if (lm.HierarchyLevel > 0) continue; // only compare base-level landmarks
+            if (_landmarks.Count == 0)
+                return Task.FromResult<(StateLandmark, double)?>(null);
 
-            var d = encoder.Distance(embedding, lm.Embedding);
-            if (d < bestDist)
+            StateLandmark? best = null;
+            double bestDist = double.MaxValue;
+
+            foreach (var lm in _landmarks.Values)
             {
-                bestDist = d;
-                best = lm;
-            }
-        }
+                if (lm.HierarchyLevel > 0) continue;
 
-        return best is null
-            ? Task.FromResult<(StateLandmark, double)?>(null)
-            : Task.FromResult<(StateLandmark, double)?>((best, bestDist));
+                var d = encoder.Distance(embedding, lm.Embedding);
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = lm;
+                }
+            }
+
+            return best is null
+                ? Task.FromResult<(StateLandmark, double)?>(null)
+                : Task.FromResult<(StateLandmark, double)?>((GraphMemorySerialization.CloneLandmark(best), bestDist));
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     // ── Edge Operations ──
 
     public Task UpsertTransitionAsync(StateTransition transition)
     {
-        var edgeKey = $"{transition.SourceId}→{transition.TargetId}→{transition.Action}";
-        _edges[edgeKey] = transition;
-
-        if (!_outgoing.TryGetValue(transition.SourceId, out var list))
+        var stored = GraphMemorySerialization.CloneTransition(transition);
+        _lock.EnterWriteLock();
+        try
         {
-            list = [];
-            _outgoing[transition.SourceId] = list;
-        }
+            var edgeKey = $"{stored.SourceId}→{stored.TargetId}→{stored.Action}";
+            _edges[edgeKey] = stored;
 
-        // Replace existing or add new
-        var idx = list.FindIndex(t =>
-            t.TargetId == transition.TargetId && t.Action == transition.Action);
-        if (idx >= 0)
-            list[idx] = transition;
-        else
-            list.Add(transition);
+            if (!_outgoing.TryGetValue(stored.SourceId, out var list))
+            {
+                list = [];
+                _outgoing[stored.SourceId] = list;
+            }
+
+            var idx = list.FindIndex(t =>
+                t.TargetId == stored.TargetId && t.Action == stored.Action);
+            if (idx >= 0)
+                list[idx] = stored;
+            else
+                list.Add(stored);
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
 
         return Task.CompletedTask;
     }
 
     public Task<IReadOnlyList<StateTransition>> GetOutgoingTransitionsAsync(string landmarkId)
     {
-        _outgoing.TryGetValue(landmarkId, out var list);
-        IReadOnlyList<StateTransition> result = list ?? [];
-        return Task.FromResult(result);
+        _lock.EnterReadLock();
+        try
+        {
+            _outgoing.TryGetValue(landmarkId, out var list);
+            IReadOnlyList<StateTransition> result = list?.Select(GraphMemorySerialization.CloneTransition).ToList() ?? [];
+            return Task.FromResult(result);
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     // ── Graph Queries ──
@@ -182,24 +231,42 @@ public sealed class InMemoryGraphMemory : IGraphMemory
     /// <summary>Frontier landmarks ranked by exploration priority.</summary>
     public Task<IReadOnlyList<StateLandmark>> GetFrontierLandmarksAsync(int topK = 5)
     {
-        IReadOnlyList<StateLandmark> result = _landmarks.Values
-            .Where(l => l.HierarchyLevel == 0)
-            .OrderByDescending(l => l.NoveltyScore / Math.Max(1, l.VisitCount))
-            .ThenBy(l => _outgoing.TryGetValue(l.Id, out var outs) ? outs.Count : 0)
-            .Take(topK)
-            .ToList();
-        return Task.FromResult(result);
+        _lock.EnterReadLock();
+        try
+        {
+            IReadOnlyList<StateLandmark> result = _landmarks.Values
+                .Where(l => l.HierarchyLevel == 0)
+                .OrderByDescending(l => l.NoveltyScore / Math.Max(1, l.VisitCount))
+                .ThenBy(l => _outgoing.TryGetValue(l.Id, out var outs) ? outs.Count : 0)
+                .Take(topK)
+                .Select(GraphMemorySerialization.CloneLandmark)
+                .ToList();
+            return Task.FromResult(result);
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     /// <summary>Prioritised replay sampling weighted by TD-error and staleness.</summary>
     public Task<IReadOnlyList<StateTransition>> PrioritisedSampleAsync(int batchSize, long currentTimestep)
     {
-        IReadOnlyList<StateTransition> result = _edges.Values
-            .OrderByDescending(t =>
-                Math.Abs(t.TdError) + 0.01 * (currentTimestep - t.LastTrainedTimestep))
-            .Take(batchSize)
-            .ToList();
-        return Task.FromResult(result);
+        _lock.EnterReadLock();
+        try
+        {
+            IReadOnlyList<StateTransition> result = _edges.Values
+                .OrderByDescending(t =>
+                    Math.Abs(t.TdError) + 0.01 * (currentTimestep - t.LastTrainedTimestep))
+                .Take(batchSize)
+                .Select(GraphMemorySerialization.CloneTransition)
+                .ToList();
+            return Task.FromResult(result);
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     // ── Graph Maintenance ──
@@ -207,90 +274,119 @@ public sealed class InMemoryGraphMemory : IGraphMemory
     /// <summary>Label propagation community detection.</summary>
     public Task AssignClustersAsync(int rounds = 5)
     {
-        // Initialise each landmark with its own cluster
-        int clusterCounter = 0;
-        foreach (var lm in _landmarks.Values)
+        _lock.EnterWriteLock();
+        try
         {
-            lm.ClusterId = clusterCounter++;
-        }
-
-        for (int round = 0; round < rounds; round++)
-        {
+            int clusterCounter = 0;
             foreach (var lm in _landmarks.Values)
             {
-                if (!_outgoing.TryGetValue(lm.Id, out var transitions) || transitions.Count == 0)
-                    continue;
+                lm.ClusterId = clusterCounter++;
+            }
 
-                // Count neighbor cluster labels
-                var labelCounts = new Dictionary<int, int>();
-                foreach (var t in transitions)
+            for (int round = 0; round < rounds; round++)
+            {
+                foreach (var lm in _landmarks.Values)
                 {
-                    if (_landmarks.TryGetValue(t.TargetId, out var neighbor))
+                    if (!_outgoing.TryGetValue(lm.Id, out var transitions) || transitions.Count == 0)
+                        continue;
+
+                    var labelCounts = new Dictionary<int, int>();
+                    foreach (var t in transitions)
                     {
-                        labelCounts.TryGetValue(neighbor.ClusterId, out var count);
-                        labelCounts[neighbor.ClusterId] = count + 1;
+                        if (_landmarks.TryGetValue(t.TargetId, out var neighbor))
+                        {
+                            labelCounts.TryGetValue(neighbor.ClusterId, out var count);
+                            labelCounts[neighbor.ClusterId] = count + 1;
+                        }
                     }
-                }
 
-                // Adopt the most common neighbor label
-                if (labelCounts.Count > 0)
-                {
-                    lm.ClusterId = labelCounts.MaxBy(kv => kv.Value).Key;
+                    if (labelCounts.Count > 0)
+                        lm.ClusterId = labelCounts.MaxBy(kv => kv.Value).Key;
                 }
             }
-        }
 
-        return Task.CompletedTask;
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
     }
 
     public Task<(int Landmarks, int Transitions)> GetGraphStatsAsync()
     {
-        return Task.FromResult((_landmarks.Count, _edges.Count));
+        _lock.EnterReadLock();
+        try
+        {
+            return Task.FromResult((_landmarks.Count, _edges.Count));
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     // ── Pruning / Decay ──
 
     public Task<bool> RemoveLandmarkAsync(string id)
     {
-        if (!_landmarks.Remove(id))
-            return Task.FromResult(false);
-
-        // Remove all outgoing transitions
-        if (_outgoing.Remove(id, out var outList))
+        _lock.EnterWriteLock();
+        try
         {
-            foreach (var t in outList)
-                _edges.Remove($"{t.SourceId}→{t.TargetId}→{t.Action}");
+            if (!_landmarks.Remove(id))
+                return Task.FromResult(false);
+
+            if (_outgoing.Remove(id, out var outList))
+            {
+                foreach (var t in outList)
+                    _edges.Remove($"{t.SourceId}→{t.TargetId}→{t.Action}");
+            }
+
+            var incomingKeys = _edges
+                .Where(kv => kv.Value.TargetId == id)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var key in incomingKeys)
+            {
+                var trans = _edges[key];
+                _edges.Remove(key);
+
+                if (_outgoing.TryGetValue(trans.SourceId, out var srcList))
+                    srcList.RemoveAll(t => t.TargetId == id);
+            }
+
+            return Task.FromResult(true);
         }
-
-        // Remove all incoming transitions (edges targeting this landmark)
-        var incomingKeys = _edges
-            .Where(kv => kv.Value.TargetId == id)
-            .Select(kv => kv.Key)
-            .ToList();
-
-        foreach (var key in incomingKeys)
+        finally
         {
-            var trans = _edges[key];
-            _edges.Remove(key);
-
-            if (_outgoing.TryGetValue(trans.SourceId, out var srcList))
-                srcList.RemoveAll(t => t.TargetId == id);
+            _lock.ExitWriteLock();
         }
-
-        return Task.FromResult(true);
     }
 
     public Task<bool> RemoveTransitionAsync(string sourceId, string targetId, int action)
     {
-        var edgeKey = $"{sourceId}→{targetId}→{action}";
-        if (!_edges.Remove(edgeKey))
-            return Task.FromResult(false);
+        _lock.EnterWriteLock();
+        try
+        {
+            var edgeKey = $"{sourceId}→{targetId}→{action}";
+            if (!_edges.Remove(edgeKey))
+                return Task.FromResult(false);
 
-        if (_outgoing.TryGetValue(sourceId, out var list))
-            list.RemoveAll(t => t.TargetId == targetId && t.Action == action);
+            if (_outgoing.TryGetValue(sourceId, out var list))
+                list.RemoveAll(t => t.TargetId == targetId && t.Action == action);
 
-        return Task.FromResult(true);
+            return Task.FromResult(true);
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        _lock.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }

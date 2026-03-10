@@ -11,25 +11,27 @@ using RichLearning.Visualization;
 //  Rich Learning — Continual RL with Topological Graph Memory
 //
 //  Usage:
-//    dotnet run                           # Interactive demo
-//    dotnet run -- SplitMnist             # Split-MNIST PoC (Neo4j)
-//    dotnet run -- SplitMnist --litedb    # Split-MNIST PoC (LiteDB — no server needed)
-//    dotnet run -- SplitAudio             # Split-Audio PoC (Neo4j)
-//    dotnet run -- SplitAudio --litedb    # Split-Audio PoC (LiteDB)
+//    dotnet run                           # Interactive demo (LiteDB by default)
+//    dotnet run -- SplitMnist             # Split-MNIST PoC (LiteDB by default)
+//    dotnet run -- SplitMnist --backend neo4j
+//    dotnet run -- SplitAudio             # Split-Audio PoC (LiteDB by default)
+//    dotnet run -- SplitAudio --backend neo4j
 //    dotnet run -- Compare                # Run both backends and compare results
 //    dotnet run -- Benchmark              # C# vs Python speed benchmark
-//    dotnet run -- Explore --litedb         # Visual graph explorer in browser
-//    dotnet run -- Explore                  # Graph explorer (Neo4j)
+//    dotnet run -- Explore                # Graph explorer (LiteDB by default)
+//    dotnet run -- Explore --backend neo4j
+//    dotnet run -- Demo --backend custom --backend-type My.Namespace.SurrealGraphMemory --backend-assembly /path/to/MyBackend.dll
 //
-//  Environment (Neo4j only):
+//  Environment:
+//    RICHLEARNING_BACKEND=litedb|neo4j|custom
+//    RICHLEARNING_LITEDB_PATH=/path/to/demo.db
 //    NEO4J_URI=bolt://localhost:7687
 //    NEO4J_USER=neo4j
 //    NEO4J_PASSWORD=password
+//    NEO4J_DATABASE=optional_database_name
+//    RICHLEARNING_BACKEND_TYPE=My.Namespace.SurrealGraphMemory
+//    RICHLEARNING_BACKEND_ASSEMBLY=/path/to/MyBackend.dll
 // ─────────────────────────────────────────────────────────────────────────
-
-var neo4jUri = Environment.GetEnvironmentVariable("NEO4J_URI") ?? "bolt://localhost:7687";
-var neo4jUser = Environment.GetEnvironmentVariable("NEO4J_USER") ?? "neo4j";
-var neo4jPassword = Environment.GetEnvironmentVariable("NEO4J_PASSWORD") ?? "password";
 bool useLiteDb = args.Any(a => a.Equals("--litedb", StringComparison.OrdinalIgnoreCase));
 
 using var loggerFactory = LoggerFactory.Create(builder =>
@@ -67,18 +69,12 @@ switch (command)
 async Task RunSplitMnist(bool liteDb)
 {
     var logger = loggerFactory.CreateLogger("SplitMnist");
-    IGraphMemory memory;
-    if (liteDb)
-    {
-        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "splitmnist.db");
-        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
-        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
-    }
-    else
-    {
-        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-            loggerFactory.CreateLogger<Neo4jGraphMemory>());
-    }
+    var options = BuildBackendOptions(
+        defaultLiteDbPath: Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "splitmnist.db"),
+        forcedKind: liteDb ? "litedb" : null);
+    var memory = await GraphMemoryBackendFactory.CreateAsync(options, loggerFactory);
+    Console.WriteLine($"  [Backend] {GraphMemoryBackendFactory.Describe(options)}\n");
+
     await using (memory)
     {
         await memory.InitialiseSchemaAsync();
@@ -92,18 +88,12 @@ async Task RunSplitMnist(bool liteDb)
 async Task RunSplitAudio(bool liteDb)
 {
     var logger = loggerFactory.CreateLogger("SplitAudio");
-    IGraphMemory memory;
-    if (liteDb)
-    {
-        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "splitaudio.db");
-        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
-        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
-    }
-    else
-    {
-        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-            loggerFactory.CreateLogger<Neo4jGraphMemory>());
-    }
+    var options = BuildBackendOptions(
+        defaultLiteDbPath: Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "splitaudio.db"),
+        forcedKind: liteDb ? "litedb" : null);
+    var memory = await GraphMemoryBackendFactory.CreateAsync(options, loggerFactory);
+    Console.WriteLine($"  [Backend] {GraphMemoryBackendFactory.Describe(options)}\n");
+
     await using (memory)
     {
         await memory.InitialiseSchemaAsync();
@@ -235,21 +225,14 @@ async Task RunDemo(bool liteDb)
 {
     Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
     Console.WriteLine("║       Rich Learning — Topological Graph Memory for RL       ║");
-    Console.WriteLine($"║       .NET 10 • {(liteDb ? "LiteDB" : "Neo4j ")} • Continual Learning                  ║");
+    Console.WriteLine("║       .NET 10 • Pluggable Graph Backends • Continual RL     ║");
     Console.WriteLine("╚══════════════════════════════════════════════════════════════╝\n");
 
-    IGraphMemory memory;
-    if (liteDb)
-    {
-        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "demo.db");
-        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
-        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
-    }
-    else
-    {
-        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-            loggerFactory.CreateLogger<Neo4jGraphMemory>());
-    }
+    var options = BuildBackendOptions(
+        defaultLiteDbPath: Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "demo.db"),
+        forcedKind: liteDb ? "litedb" : null);
+    var memory = await GraphMemoryBackendFactory.CreateAsync(options, loggerFactory);
+    Console.WriteLine($"  [Backend] {GraphMemoryBackendFactory.Describe(options)}\n");
 
     await using (memory)
     {
@@ -287,12 +270,12 @@ async Task RunDemo(bool liteDb)
         await memory.AssignClustersAsync();
         var (lm, tr) = await memory.GetGraphStatsAsync();
         Console.WriteLine($"Final graph: {lm} landmarks, {tr} transitions");
-        if (!liteDb)
+        if (options.Kind.Equals("neo4j", StringComparison.OrdinalIgnoreCase))
             Console.WriteLine("Explore at http://localhost:7474 (Neo4j Browser)");
-        else
-            Console.WriteLine($"Database stored at: {Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "demo.db")}");
+        else if (options.Kind.Equals("litedb", StringComparison.OrdinalIgnoreCase))
+            Console.WriteLine($"Database stored at: {options.LiteDbPath}");
 
-        Console.WriteLine("\n  Tip: run  dotnet run -- Explore --litedb  to visualise this graph.");
+        Console.WriteLine("\n  Tip: run  dotnet run -- Explore  to visualise this graph.");
     }
 }
 
@@ -305,41 +288,36 @@ async Task RunExplore(bool liteDb)
     Console.WriteLine("║   Interactive topological map visualisation in your browser   ║");
     Console.WriteLine("╚════════════════════════════════════════════════════════════════╝\n");
 
-    IGraphMemory memory;
-    if (liteDb)
+    var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+    string? dbPath = null;
+    var requestedBackend = GraphMemoryBackendFactory.FromArgs(args).Kind;
+    if (liteDb || requestedBackend.Equals("litedb", StringComparison.OrdinalIgnoreCase))
     {
-        string? dbPath = null;
-        for (int i = 1; i < args.Length - 1; i++)
-            if (args[i] == "--db") dbPath = args[i + 1];
-
-        if (dbPath == null)
+        var candidates = new[] { "splitmnist.db", "demo.db", "splitaudio.db" };
+        foreach (var name in candidates)
         {
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var candidates = new[] { "splitmnist.db", "demo.db", "splitaudio.db" };
-            foreach (var name in candidates)
+            var path = Path.Combine(baseDir, name);
+            if (File.Exists(path))
             {
-                var path = Path.Combine(baseDir, name);
-                if (File.Exists(path)) { dbPath = path; break; }
+                dbPath = path;
+                break;
             }
         }
-
-        if (dbPath == null || !File.Exists(dbPath))
-        {
-            Console.WriteLine("  No database found. Run a PoC first:");
-            Console.WriteLine("    dotnet run -- SplitMnist --litedb");
-            Console.WriteLine("    dotnet run -- Demo --litedb");
-            return;
-        }
-
-        memory = new LiteDbGraphMemory(dbPath, loggerFactory.CreateLogger<LiteDbGraphMemory>());
-        Console.WriteLine($"  [Backend] LiteDB → {dbPath}\n");
     }
-    else
+
+    var options = BuildBackendOptions(dbPath, forcedKind: liteDb ? "litedb" : null);
+    if (options.Kind.Equals("litedb", StringComparison.OrdinalIgnoreCase)
+        && (string.IsNullOrWhiteSpace(options.LiteDbPath) || !File.Exists(options.LiteDbPath)))
     {
-        memory = new Neo4jGraphMemory(neo4jUri, neo4jUser, neo4jPassword,
-            loggerFactory.CreateLogger<Neo4jGraphMemory>());
-        Console.WriteLine($"  [Backend] Neo4j → {neo4jUri}\n");
+        Console.WriteLine("  No LiteDB database found. Run a PoC first or pass --db:");
+        Console.WriteLine("    dotnet run -- SplitMnist");
+        Console.WriteLine("    dotnet run -- Demo");
+        Console.WriteLine("    dotnet run -- Explore --db /path/to/file.db");
+        return;
     }
+
+    var memory = await GraphMemoryBackendFactory.CreateAsync(options, loggerFactory);
+    Console.WriteLine($"  [Backend] {GraphMemoryBackendFactory.Describe(options)}\n");
 
     await using (memory)
     {
@@ -354,3 +332,6 @@ async Task RunExplore(bool liteDb)
         await GraphExplorerServer.RunAsync(memory);
     }
 }
+
+GraphMemoryBackendOptions BuildBackendOptions(string? defaultLiteDbPath, string? forcedKind = null) =>
+    GraphMemoryBackendFactory.FromArgs(args, defaultLiteDbPath, forcedKind);

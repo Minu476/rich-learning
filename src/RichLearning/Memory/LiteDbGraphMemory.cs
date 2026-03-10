@@ -55,7 +55,7 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         var doc = new LandmarkDoc
         {
             LandmarkId = landmark.Id,
-            Embedding = landmark.Embedding,
+            Embedding = landmark.Embedding.ToArray(),
             VisitCount = landmark.VisitCount,
             ValueEstimate = landmark.ValueEstimate,
             NoveltyScore = landmark.NoveltyScore,
@@ -63,10 +63,11 @@ public sealed class LiteDbGraphMemory : IGraphMemory
             ClusterId = landmark.ClusterId,
             HierarchyLevel = landmark.HierarchyLevel,
             ChildNodeIds = landmark.ChildNodeIds.ToList(),
-            ActionCounts = landmark.ActionCounts,
+            ActionCounts = new Dictionary<int, int>(landmark.ActionCounts),
             LastVisitedTimestep = landmark.LastVisitedTimestep,
             CreatedTimestep = landmark.CreatedTimestep,
-            Metadata = landmark.Metadata.ToDictionary(k => k.Key, v => v.Value?.ToString() ?? "")
+            MetadataJson = GraphMemorySerialization.SerializeMetadata(landmark.Metadata),
+            EpisodicTracesJson = GraphMemorySerialization.SerializeEpisodicTraces(landmark.EpisodicTraces)
         };
 
         var existing = _landmarks.FindOne(x => x.LandmarkId == landmark.Id);
@@ -132,12 +133,17 @@ public sealed class LiteDbGraphMemory : IGraphMemory
             SourceId = transition.SourceId,
             TargetId = transition.TargetId,
             Action = transition.Action,
+            ActionCountsJson = GraphMemorySerialization.SerializeActionCounts(transition.ActionCounts),
             Reward = transition.Reward,
+            RewardVariance = transition.RewardVariance,
             TransitionCount = transition.TransitionCount,
             SuccessRate = transition.SuccessRate,
+            Confidence = transition.Confidence,
             TemporalDistance = transition.TemporalDistance,
             TdError = transition.TdError,
-            LastTrainedTimestep = transition.LastTrainedTimestep
+            LastTrainedTimestep = transition.LastTrainedTimestep,
+            IsMacroEdge = transition.IsMacroEdge,
+            MacroPathJson = GraphMemorySerialization.SerializeMacroPath(transition.MacroPath)
         };
 
         var existing = _transitions.FindOne(x => x.CompositeKey == key);
@@ -414,7 +420,7 @@ public sealed class LiteDbGraphMemory : IGraphMemory
     private static StateLandmark MapToLandmark(LandmarkDoc doc) => new()
     {
         Id = doc.LandmarkId,
-        Embedding = doc.Embedding,
+        Embedding = doc.Embedding.ToArray(),
         VisitCount = doc.VisitCount,
         ValueEstimate = doc.ValueEstimate,
         NoveltyScore = doc.NoveltyScore,
@@ -425,7 +431,10 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         LastVisitedTimestep = doc.LastVisitedTimestep,
         CreatedTimestep = doc.CreatedTimestep,
         ActionCounts = doc.ActionCounts ?? new(),
-        Metadata = doc.Metadata?.ToDictionary(k => k.Key, v => (object)v) ?? new()
+        EpisodicTraces = GraphMemorySerialization.DeserializeEpisodicTraces(doc.EpisodicTracesJson),
+        Metadata = !string.IsNullOrWhiteSpace(doc.MetadataJson)
+            ? GraphMemorySerialization.DeserializeMetadata(doc.MetadataJson)
+            : doc.Metadata?.ToDictionary(k => k.Key, v => (object)v.Value) ?? new()
     };
 
     private static StateTransition MapToTransition(TransitionDoc doc) => new()
@@ -433,12 +442,17 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         SourceId = doc.SourceId,
         TargetId = doc.TargetId,
         Action = doc.Action,
+        ActionCounts = GraphMemorySerialization.DeserializeActionCounts(doc.ActionCountsJson),
         Reward = doc.Reward,
+        RewardVariance = doc.RewardVariance,
         TransitionCount = doc.TransitionCount,
         SuccessRate = doc.SuccessRate,
+        Confidence = doc.Confidence,
         TemporalDistance = doc.TemporalDistance,
         TdError = doc.TdError,
-        LastTrainedTimestep = doc.LastTrainedTimestep
+        LastTrainedTimestep = doc.LastTrainedTimestep,
+        IsMacroEdge = doc.IsMacroEdge,
+        MacroPath = GraphMemorySerialization.DeserializeMacroPath(doc.MacroPathJson)
     };
 
     public ValueTask DisposeAsync()
@@ -464,6 +478,8 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         public Dictionary<int, int> ActionCounts { get; set; } = new();
         public long LastVisitedTimestep { get; set; }
         public long CreatedTimestep { get; set; }
+        public string MetadataJson { get; set; } = string.Empty;
+        public string EpisodicTracesJson { get; set; } = string.Empty;
         public Dictionary<string, string> Metadata { get; set; } = new();
     }
 
@@ -474,11 +490,16 @@ public sealed class LiteDbGraphMemory : IGraphMemory
         public string SourceId { get; set; } = string.Empty;
         public string TargetId { get; set; } = string.Empty;
         public int Action { get; set; }
+        public string ActionCountsJson { get; set; } = string.Empty;
         public double Reward { get; set; }
+        public double RewardVariance { get; set; }
         public int TransitionCount { get; set; } = 1;
         public double SuccessRate { get; set; } = 1.0;
+        public double Confidence { get; set; } = 0.5;
         public int TemporalDistance { get; set; } = 1;
         public double TdError { get; set; }
         public long LastTrainedTimestep { get; set; }
+        public bool IsMacroEdge { get; set; }
+        public string MacroPathJson { get; set; } = string.Empty;
     }
 }

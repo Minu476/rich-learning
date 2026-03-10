@@ -20,10 +20,16 @@ namespace RichLearning.Abstractions;
 ///   - Community detection (clustering)
 ///
 /// Implementations:
-///   - InMemoryGraphMemory: zero-dependency, in-process (default for PoCs)
+///   - InMemoryGraphMemory: zero-dependency, in-process (default for tests)
 ///   - LiteDbGraphMemory: embedded NoSQL, persistent, zero-setup
 ///   - Neo4jGraphMemory: server-mode, Cypher-native, production-grade
-///   - Domain-specific: DuckDB for analytics, Redis for distributed, etc.
+///   - Domain-specific: SurrealDB, DuckDB, Redis, or other custom backends
+///
+/// Contract requirements for all implementations:
+///   - Round-trip every public field on StateLandmark and StateTransition.
+///   - Preserve metadata value types; do not coerce all values to strings.
+///   - Return detached objects from reads so callers cannot mutate internal storage.
+///   - Keep graph query semantics aligned with the built-in backends.
 /// </summary>
 public interface IGraphMemory : IAsyncDisposable
 {
