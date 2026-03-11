@@ -205,11 +205,17 @@ rich-learning/
 ├── src/RichLearning/
 │   ├── Abstractions/          # Interfaces (IGraphMemory, IStateEncoder, ...)
 │   ├── Models/                # StateLandmark, StateTransition, SubgoalDirective
-│   ├── Memory/                # LiteDbGraphMemory (default) + Neo4jGraphMemory
+│   ├── Memory/
+│   │   ├── InMemoryGraphMemory.cs         # Default in-process backend
+│   │   ├── LiteDbGraphMemory.cs           # Embedded file-based backend (default for PoCs)
+│   │   ├── Neo4jGraphMemory.cs            # Server-based backend (production scale)
+│   │   ├── GraphMemoryBackendFactory.cs   # Runtime backend resolver (litedb/neo4j/inmemory/custom)
+│   │   └── GraphMemorySerialization.cs    # Portable JSON import/export across backends
 │   ├── Planning/              # Cartographer (mid-level planner)
 │   └── PoC/
 │       ├── SplitMnist/        # Catastrophic forgetting on MNIST digits
 │       └── SplitAudio/        # Catastrophic forgetting on FSD50K audio
+├── tests/RichLearning.Tests/  # Contract, isolation, and factory tests
 ├── data/                      # Pre-extracted features (gitignored for large files)
 ├── paper/                     # Research paper PDF
 ├── scripts/                   # Data preparation scripts
@@ -229,8 +235,13 @@ public class MyEncoder : IStateEncoder
 ```
 
 ### Alternative Graph Backend
-Two backends are included: **LiteDB** (embedded, default) and **Neo4j** (server-based).
-Third-party backends such as SurrealDB can be loaded explicitly by implementing `IGraphMemory` and passing the backend type at runtime.
+Three built-in backends are included: **LiteDB** (embedded, default), **Neo4j** (server-based), and **InMemory** (testing/ephemeral). All three are resolved through `GraphMemoryBackendFactory` — a single runtime resolver that picks the right implementation from a name string.
+
+Third-party backends (e.g. **SurrealDB**, **ArangoDB**) require only:
+1. Implement `IGraphMemory` in your own assembly.
+2. Pass `--backend custom`, `--backend-type`, and `--backend-assembly` at the CLI.
+
+`GraphMemorySerialization` provides portable JSON export/import so you can snapshot a graph from one backend and reload it into another.
 
 Built-in host support:
 

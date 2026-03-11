@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Tracks the version alignment between the public rich-learning repository and the private rich-learning-base library.",
   "baseVersion": "1.0.0",
-  "publicVersion": "1.0.0",
-  "lastSyncDate": "2026-03-01",
-  "lastSyncCommit": null,
+  "publicVersion": "1.1.0",
+  "lastSyncDate": "2026-03-09",
+  "lastSyncCommit": "79a688b9fe6a94722915403cafbafe08ca96a4dd",
   "interfaceSubset": {
     "description": "Public repo exposes a strict subset of rich-learning-base interfaces and type definitions. Implementations are stubs pointing to the base package for full behaviour.",
     "alignedInterfaces": [
@@ -53,7 +53,9 @@
       "TrajectoryDag",
       "Fossilizer",
       "DefaultStateEncoder",
-      "GraphExplorerServer"
+      "GraphExplorerServer",
+      "GraphMemoryBackendFactory",
+      "GraphMemorySerialization"
     ],
     "publicOnly": [
       "LiteDbGraphMemory",
@@ -65,6 +67,17 @@
     ]
   },
   "changelog": [
+    {
+      "version": "1.1.0",
+      "date": "2026-03-09",
+      "changes": [
+        "Added GraphMemoryBackendFactory: resolves IGraphMemory at runtime by name (litedb, neo4j, inmemory, custom assembly)",
+        "Added GraphMemorySerialization: portable JSON import/export for any IGraphMemory backend",
+        "Pluggable backend design — third-party backends (e.g. SurrealDB) loadable via --backend custom + --backend-assembly",
+        "Hardened persistence contracts: backends must round-trip all StateLandmark/StateTransition fields",
+        "Added LiteDbGraphMemoryContractTests, GraphMemoryBackendFactoryTests, InMemoryGraphMemoryIsolationTests"
+      ]
+    },
     {
       "version": "1.0.0",
       "date": "2026-03-01",
